@@ -1,0 +1,4 @@
+*.autosave
+*.idea*
+*build*
+*.user
