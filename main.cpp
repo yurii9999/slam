@@ -9,7 +9,6 @@
 
 #include "opencv2/imgproc.hpp"
 
-#include "ExtendedKeyPoint.h"
 #include "RegularFrame.h"
 #include "FancyDrawer.h"
 
