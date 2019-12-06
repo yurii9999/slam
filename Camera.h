@@ -10,6 +10,8 @@
 
 using namespace cv;
 
+/* camera = frame + R,t */
+
 class Camera {
 public:
     Mat R;

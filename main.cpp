@@ -12,17 +12,12 @@
 #include "RegularFrame.h"
 #include "FancyDrawer.h"
 
+#include "FrameKeeper.h"
+
 using namespace std;
 using namespace cv;
 
-/* Создать отдельный класс RegularFrame, туда вынести из трекера KpAdditional,
- * И перенести туда все рисовалки */
-/* Добавить рисовалки только тех точек, возраст которых больше двух */
 /* Добавить изменение дескрипторов в трекере и обновление дополнительной информации */
-/* Добавить поддержку поля "индекс на пердыдущем кадре" (Видимо, тоже в трекере, или сделать какой то класс внутри трекера -- матчер) */
-
-/* ещё я подумал, что возможно отбор стабильных точек -- это тоже не обязанности трекера, а обязанности отборщика точек */
-/* то есть трекер только трекает точки, а стабильные или нестабильные ему вообщем то пофек, если нашлось на предыдущем кадре что то, то он продолжит то что нашел, если нет, то начнет новую */
 
 int main(int argc, char** argv)
 {
@@ -32,7 +27,9 @@ int main(int argc, char** argv)
     Ptr<DescriptorMatcher> matcher = BFMatcher::create(NORM_HAMMING);
     Tracker t(detector, matcher);
 
-    for (int32_t i=0; i<10; i++) {
+    FrameKeeper fk;
+
+    for (int32_t i=0; i<20; i++) {
         // st is taken from libviso's demo.cpp
         // input file names
         char base_name[256]; sprintf(base_name,"%06d.png",i);
@@ -44,10 +41,8 @@ int main(int argc, char** argv)
         Mat img_r = imread(right_img_file_name);
 
         t.push_back(img_l, img_r);
-
-        Mat out = FancyDrawer::drawStable(img_l, img_r, *t.prev);
+        fk.push_back(t.prev, t.corresopondences);
         string outname = output_dir + (string) base_name;
-        imwrite(outname, out);
     }
 
     cout << "Hello World!" << endl;

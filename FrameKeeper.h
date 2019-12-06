@@ -6,25 +6,21 @@
 #define TRACKING_FRAMEKEEPER_H
 
 #include "Tracker.h"
+#include "RegularFrame.h"
 #include <vector>
 
 using namespace std;
-/* common interface for logging frames in Tracker.h:
- * Is bool logging is enable, each frame of sequence is logged using this class
- *
- * It could be mock object, that just send frame to trash, or could be object that keeps only 5 last frames, or keeps all, or keeps every second frame */
-
-/* Это нужный класс, но только я решил, что не должно быть зависимости Трекера от ФрэймКипера, обязанности трекера -- это просто предоставить множество хороших особых точек,
- * для этого ему нужно хранить только предыдущий "кадр"
- * Сохранять кадры для дальнейшей оптимизации в его обязанности не входит, поэтому ФрэймКипер будет вызываться из мэйна, а трекер ничего знать про него не будет */
-
+/* class keeps n(=2) last RegularFrames and correspondences between them */
 /* МОжно сделать декоратор над треккингом который логгирует точки */
 
 class FrameKeeper {
 public:
-    void push_back();
+    /* now it keeps two last frames that we gave it, but in the future there will be need to keep more than two */
+    void push_back(Ptr<RegularFrame> frame, vector<int> correspondences); /* to initialize system, better just push back empty vector, than create special method for this */
 private:
-//    vector<Tracker::RegularFrame> frames;
+    Ptr<RegularFrame> prev;
+    vector<int> correspondences;
+    Ptr<RegularFrame> cur;
 };
 
 

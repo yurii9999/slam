@@ -10,13 +10,7 @@ using namespace std;
 
 using namespace cv;
 
-
-/*  написать:
- * замену дескрипторов
- * использование информации которая дополнительная в отдельной структуре (увеличение взраста с течением времени, и остальную информацию, чтобы *хз, забыл дописать а сейчас забыл и лень перечитывать чтобы вспоминать сори(((( *
- * нарисовать метод который рисует точки одним цветом на четырех кадрах */
-
-/* methods search first element of list, where queiryIndx = index and returns trainIndx or -1 if index does not founded*/
+/* methods search first element of list, where queiryIndx = index and returns trainIndx or -1 if index does not founded */
 int getNextIndex(int index, vector<DMatch> list) {
     for (int i = 0; i < list.size(); i++) {
         DMatch c = list[i];
@@ -34,17 +28,18 @@ int getNextIndex(int index, vector<DMatch> list) {
 
 /* returns vector of indexs of points in vector<DMatch> begin, that was found through all nodes */
 /* and vector on indexs -- correspondence: correspondence[i] -- corresponding to stable[i]'th feature on previous stereopair */
-pair<vector<int>, vector<int>> getStable(vector<DMatch> cur_left, vector<DMatch> cur_right, vector<DMatch> prev_right, vector<DMatch> prev_left) {
+pair<vector<int>, vector<int>> getStable(vector<DMatch> cl_cr, vector<DMatch> cr_pr, vector<DMatch> pr_pl, vector<DMatch> pl_cl) {
+    // getStable(cl_cr, cr_pr, pr_pl, pl_cl);
     vector<int> stable;
     vector<int> correspondence;
 
-    for (int i = 0; i < cur_left.size(); i++) {
-        DMatch c = cur_left[i];
+    for (int i = 0; i < cl_cr.size(); i++) {
+        DMatch c = cl_cr[i];
         int i1 = c.queryIdx;
         int i2 = c.trainIdx;
-        int i3 = getNextIndex(i2, cur_right); /* i3 -- index of feature on prev_right */
-        int i4 = getNextIndex(i3, prev_right); /* i4 -- index of feature on prev_left */
-        int i5 = getNextIndex(i4, prev_left);
+        int i3 = getNextIndex(i2, cr_pr); /* i3 -- index of feature on prev_right */
+        int i4 = getNextIndex(i3, pr_pl); /* i4 -- index of feature on prev_left */
+        int i5 = getNextIndex(i4, pl_cl);
 
         if (i1 == i5) {
             stable.push_back(i);
