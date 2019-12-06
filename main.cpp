@@ -29,7 +29,7 @@ int main(int argc, char** argv)
 
     FrameKeeper fk;
 
-    for (int32_t i=0; i<20; i++) {
+    for (int32_t i=0; i<5; i++) {
         // st is taken from libviso's demo.cpp
         // input file names
         char base_name[256]; sprintf(base_name,"%06d.png",i);
