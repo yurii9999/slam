@@ -13,6 +13,7 @@ void FrameKeeper::push_back(Ptr<RegularFrame> frame, vector<int> correspondences
         return;
     }
 
+    this->prev.release();
     this->prev = this->cur;
     this->cur = frame;
     this->correspondences = correspondences;
