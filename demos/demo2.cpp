@@ -36,10 +36,6 @@ int main(int argc, char** argv)
     Ptr<RegularFrame> frame2 = t.prev;
 
     vector<int> correspondeces = t.corresopondences;
-    for (int i = 0; i < correspondeces.size(); i++) {
-        cout << "\t" << correspondeces[i];
-    }
-    cout << endl << correspondeces.size();
 
     const int Radius = 5;
     for (int i = 0; i < frame2.get()->stable.size(); i++) {
