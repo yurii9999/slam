@@ -60,13 +60,15 @@ public:
     vector<DMatch> matchCorrespondencesStereoPair(Mat desc1, Mat desc2);
     vector<DMatch> matchCorrespondences(Mat desc1, Mat desc2);
 
-    /* strategy pattern */
+    /* strategy pattern???? */
     Ptr<Feature2D> m_detector; /* why m_...???? */
     Ptr<DescriptorMatcher> m_matcher;
 
 //private:
     /* maybe rename it to 'lastProcessed' */
     Ptr<RegularFrame> prev; /* frame that was processed recently */
+    vector<int> corresopondences; /* each RegularFrame is pair of set of correspondend features on stereopair. This vector<int> correspondences is correspondence between current and previous stereopairs */
+                                  /* correspondences[i] -- is state[i]'h feature index on previous pair */
     bool initialized; /* <=> prev != NULL */
 };
 
