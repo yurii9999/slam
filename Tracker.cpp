@@ -130,7 +130,7 @@ void Tracker::push_back(cv::Mat img_left, cv::Mat img_right) {
     vector<int> prevStable_copy = prev.get()->stable;
     vector<bool> isContinued;
     for (int i = 0; i < prevStable_copy.size(); i++) {
-        isContinued[i] = false;
+        isContinued.push_back(false);
     }
     /* we have correspondence[] and prevStable[] -- indexes of prev.kpts1[]; And we need to know, whick index contains in both vectors */
     for (int i = 0; i < this->corresopondences.size(); i++) {
