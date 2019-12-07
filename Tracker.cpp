@@ -58,9 +58,6 @@ int findElem(vector<int> v, int e) {
         if (e == v[i]) {
             return i;
         }
-        if (e > v[i]) {
-            return -1;
-        }
     }
     return -1;
 }
@@ -127,21 +124,19 @@ void Tracker::push_back(cv::Mat img_left, cv::Mat img_right) {
     /* можно итератором параллельно идти по векторам stable, prev.stable, correspondences */
 
     vector<RegularFrame::KpAdditional> additionals;
-    vector<int> prevStable_copy = prev.get()->stable;
     vector<bool> isContinued;
-    for (int i = 0; i < prevStable_copy.size(); i++) {
+    for (int i = 0; i < prev.get()->stable.size(); i++) {
         isContinued.push_back(false);
     }
     /* we have correspondence[] and prevStable[] -- indexes of prev.kpts1[]; And we need to know, whick index contains in both vectors */
     for (int i = 0; i < this->corresopondences.size(); i++) {
         int c = corresopondences[i];
-        int i1 = findElem(prevStable_copy, c);
+        int i1 = findElem(prev.get()->stable, c);
         if (i1 == -1) {
             RegularFrame::KpAdditional c(1, false, idGenerator.getId());
             additionals.push_back(c);
         } else {
             isContinued[i1] = true;
-//            prevStable_copy.erase(prevStable_copy.begin() + i1); /* delete i1 th elem */
             RegularFrame::KpAdditional prev_c = prev.get()->additional[i1];
             RegularFrame::KpAdditional c(prev_c.age + 1, prev_c.isKnown, prev_c.id);
             additionals.push_back(c);
@@ -151,7 +146,7 @@ void Tracker::push_back(cv::Mat img_left, cv::Mat img_right) {
          * чтобы можно было быстрее проверять но пока что прямолинейный способ */
     }
 
-    for (int i = 0; i < prevStable_copy.size(); i++) {
+    for (int i = 0; i < prev.get()->stable.size(); i++) {
         if (!isContinued[i]) {
             RegularFrame::KpAdditional prev_c = prev.get()->additional[i];
             idGenerator.release(prev_c.id);

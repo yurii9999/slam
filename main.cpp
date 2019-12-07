@@ -43,6 +43,21 @@ int main(int argc, char** argv)
         t.push_back(img_l, img_r);
         fk.push_back(t.prev, t.corresopondences);
         string outname = output_dir + (string) base_name;
+        cout << "amount of old points:";
+        vector<int> points;
+        for (int i = 0; i < 10; i++) {
+            points.push_back(0);
+        }
+
+        for (int i = 0; i < t.prev.get()->additional.size(); i++) {
+            RegularFrame::KpAdditional p = t.prev.get()->additional[i];
+            points[p.age]++;
+        }
+        cout << "\n========================\n";
+        for (int i = 0; i < points.size(); i++) {
+            cout << "\t" << points[i] << " points of age " << i << endl;
+        }
+
     }
 
     cout << "Hello World!" << endl;
