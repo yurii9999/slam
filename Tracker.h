@@ -7,7 +7,7 @@
 #include "Camera.h"
 
 #include "FrameKeeper.h"
-
+#include "IdGenerator.h"
 #include "RegularFrame.h"
 
 using namespace std;
@@ -37,6 +37,7 @@ public:
     vector<int> corresopondences; /* each RegularFrame is pair of set of correspondend features on stereopair. This vector<int> correspondences is correspondence between current and previous stereopairs */
                                   /* correspondences[i] -- is state[i]'h feature index on previous pair */
     bool initialized; /* <=> prev != NULL */
+    IdGenerator idGenerator;
 };
 
 

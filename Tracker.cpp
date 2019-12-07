@@ -6,6 +6,8 @@
 #include "RegularFrame.h"
 #include "Tracker.h"
 
+#include "IdGenerator.h"
+
 using namespace std;
 
 using namespace cv;
@@ -51,6 +53,18 @@ pair<vector<int>, vector<int>> getStable(vector<DMatch> cl_cr, vector<DMatch> cr
     return result;
 }
 
+int findElem(vector<int> v, int e) {
+    for (int i = 0; i < v.size(); i++) {
+        if (e == v[i]) {
+            return i;
+        }
+        if (e > v[i]) {
+            return -1;
+        }
+    }
+    return -1;
+}
+
 void Tracker::push_back(cv::Mat img_left, cv::Mat img_right) {
     vector<KeyPoint> kpts_l, kpts_r;
     Mat desc_l, desc_r;
@@ -86,11 +100,11 @@ void Tracker::push_back(cv::Mat img_left, cv::Mat img_right) {
 
     /* initialization */
     if (!initialized) {
-        vector<RegularFrame::KpAdditional> kkk;
-        vector<int> empty;
+        vector<RegularFrame::KpAdditional> empty; /* #stable == 0 */
+        vector<int> emptyStable;
         vector<int> emptyCorrespondences;
         this->corresopondences = emptyCorrespondences;
-        prev = new RegularFrame(matchers_l, matchers_r, newDesc_l, newDesc_r, kkk, kkk, empty);
+        prev = new RegularFrame(matchers_l, matchers_r, newDesc_l, newDesc_r, empty, emptyStable);
         initialized = true;
         return;
     }
@@ -105,20 +119,47 @@ void Tracker::push_back(cv::Mat img_left, cv::Mat img_right) {
     vector<DMatch> pl_cl = matchCorrespondences(prev.get()->descriptors_l, newDesc_l);
     /* or we can remove features that already are not stable, before trying to match them in next frame */
 
-
     pair<vector<int>, vector<int>> stableAndCorrespondece = getStable(cl_cr, cr_pr, pr_pl, pl_cl);
     vector<int> stableFeatures = stableAndCorrespondece.first; /* indexes of features in matchers_l */
-    vector<int> correspondencesBetweenFrames = stableAndCorrespondece.second; /* curFeatures[stable[i]] correspond to prevFeatures[correspondenceBetweenFrames[i]] */
-    /* do something with names of vars */
+    this->corresopondences = stableAndCorrespondece.second; /* curFeatures[stable[i]] correspond to prevFeatures[correspondences[i]] */
+    /* coresOpondences???? -- move preparetion of new stereopair to separate method and rename this */
 
-    this->corresopondences = correspondencesBetweenFrames;
+    /* можно итератором параллельно идти по векторам stable, prev.stable, correspondences */
 
-    vector<RegularFrame::KpAdditional> kkk;
+    vector<RegularFrame::KpAdditional> additionals;
+    vector<int> prevStable_copy = prev.get()->stable;
+    vector<bool> isContinued;
+    for (int i = 0; i < prevStable_copy.size(); i++) {
+        isContinued[i] = false;
+    }
+    /* we have correspondence[] and prevStable[] -- indexes of prev.kpts1[]; And we need to know, whick index contains in both vectors */
+    for (int i = 0; i < this->corresopondences.size(); i++) {
+        int c = corresopondences[i];
+        int i1 = findElem(prevStable_copy, c);
+        if (i1 == -1) {
+            RegularFrame::KpAdditional c(1, false, idGenerator.getId());
+            additionals.push_back(c);
+        } else {
+            isContinued[i1] = true;
+//            prevStable_copy.erase(prevStable_copy.begin() + i1); /* delete i1 th elem */
+            RegularFrame::KpAdditional prev_c = prev.get()->additional[i1];
+            RegularFrame::KpAdditional c(prev_c.age + 1, prev_c.isKnown, prev_c.id);
+            additionals.push_back(c);
+        }
+        /* еще нужно удалять id ы у точек с предыдущего кадра которые не были найдены на новом */
+        /* я не могу сейчас придумать эффективного способа это сделать, пока что сделаю как то, если в будущем этого хватать не будет я перепишу, можно добавить в трекере vector<bool> isStable,
+         * чтобы можно было быстрее проверять но пока что прямолинейный способ */
+    }
+
+    for (int i = 0; i < prevStable_copy.size(); i++) {
+        if (!isContinued[i]) {
+            RegularFrame::KpAdditional prev_c = prev.get()->additional[i];
+            idGenerator.release(prev_c.id);
+        }
+    }
+
     this->prev.release();
-    this->prev = new RegularFrame(matchers_l, matchers_r, newDesc_l, newDesc_r, kkk, kkk, stableFeatures);;
-
-    /* is there essential difference beetwen left -> right and right -> left ??????????? */
-    return;
+    this->prev = new RegularFrame(matchers_l, matchers_r, newDesc_l, newDesc_r, additionals, stableFeatures);
 }
 
 /* find correspondences between two frames (frames represented as a set of features with corresponded descriptors) */
