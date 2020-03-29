@@ -12,7 +12,14 @@ using cv::Mat;
 class Tracker
 {
 public:
-    Tracker(Matcher::parameters param) {
+    Tracker(double focal, double cu, double cv, Matcher::parameters param) {
+        this->focal = focal;
+        this->cu = cu;
+        this->cv = cv;
+
+        param.f = focal;
+        param.cu = cu;
+        param.cv = cv;
         matcher = new Matcher(param);
     }
 
@@ -24,6 +31,14 @@ public:
     void push_back(uint8_t *I1,uint8_t* I2,int32_t* dims);
 
 //private:
+    /* transform image point to bearing vector(openGV terminology) -- unit vector from camera's center */
+    Eigen::Vector3d normolize(Eigen::Vector2d a);
+
+    double focal;
+    double cv;
+    double cu;
+    bool normalize_points = true;
+
     Matcher *matcher;
     shared_ptr<RegularFrame> previous;
     shared_ptr<RegularFrame> current;

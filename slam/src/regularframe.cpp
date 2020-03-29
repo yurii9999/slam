@@ -5,7 +5,10 @@ RegularFrame::RegularFrame()
 
 }
 
-void RegularFrame::push_back(int i1, int i2, float u1, float v1, float u2, float v2, const RegularFrame::StablePoint &previous)
+void RegularFrame::push_back(int i1, int i2,
+                             Eigen::Vector3d bearing_vector_left,
+                             Eigen::Vector3d bearing_vector_right,
+                             const RegularFrame::StablePoint &previous)
 {
     int age = previous.age + 1;
     int buffer_index = previous.buffer->size(); /* немного подругому надо */
@@ -14,8 +17,8 @@ void RegularFrame::push_back(int i1, int i2, float u1, float v1, float u2, float
     points.push_back(
                 StablePoint(
                     i1, i2,
-                    Vector2f(u1, v1),
-                    Vector2f(u2, v2),
+                    bearing_vector_left,
+                    bearing_vector_right,
                     age,
                     previous.reliability,
                     previous.buffer,
@@ -24,7 +27,9 @@ void RegularFrame::push_back(int i1, int i2, float u1, float v1, float u2, float
 
 }
 
-void RegularFrame::push_back(int i1, int i2, float u1, float v1, float u2, float v2) {
+void RegularFrame::push_back(int i1, int i2,
+                             Eigen::Vector3d bearing_vector_left,
+                             Eigen::Vector3d bearing_vector_right) {
     int age = 0;
     int buffer_index = 0;
     shared_ptr<circular_buffer<int>> buff(new circular_buffer<int>(64));
@@ -33,8 +38,8 @@ void RegularFrame::push_back(int i1, int i2, float u1, float v1, float u2, float
     points.push_back(
                 StablePoint(
                     i1, i2,
-                    Vector2f(u1, v1),
-                    Vector2f(u2, v2),
+                    bearing_vector_left,
+                    bearing_vector_right,
                     age,
                     0,
                     buff,

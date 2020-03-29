@@ -3,6 +3,14 @@
 
 using std::vector;
 
+Eigen::Vector3d Tracker::normolize(Eigen::Vector2d a) {
+
+    Eigen::Vector3d res((a[0] - cu) / focal, (a[1] - cv) / focal, 1);
+    res /= res.norm();
+
+    return res;
+}
+
 void Tracker::push_back(const cv::Mat &img_l, const cv::Mat &img_r)
 {
     int height = img_l.size[0];
@@ -50,11 +58,17 @@ void Tracker::push_back(uint8_t *I1,uint8_t* I2,int32_t* dims) {
 
         int prev_index = previous_indexs[match.i1p];
         if (prev_index == -1) { /* if this landmark was not observed in the past */
-            previous->push_back(match.i1p, match.i2p, match.u1p, match.v1p, match.u2p, match.v2p);
+
+            previous->push_back(match.i1p, match.i2p,
+                                normolize(Eigen::Vector2d(match.u1p, match.v1p)),
+                                normolize(Eigen::Vector2d(match.u2p, match.v2p)));
             prev_index = previous->points.size() - 1;
         }
 
         /* complete */
-        current->push_back(match.i1c, match.i2c, match.u1c, match.v1c, match.u2c, match.v2c, previous->points[prev_index]);
+        current->push_back(match.i1c, match.i2c,
+                           normolize(Eigen::Vector2d(match.u1c, match.v1c)),
+                           normolize(Eigen::Vector2d(match.u2c, match.v2c)),
+                           previous->points[prev_index]);
     }
 }

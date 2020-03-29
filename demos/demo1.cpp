@@ -86,7 +86,7 @@ int main (int argc, char** argv) {
     params.cv = cv;
     params.base = base;
     params.f = f;
-    Tracker tracker(params);
+    Tracker tracker(f, cu, cv, params);
 
     vector<shared_ptr<RegularFrame>> frames;
 

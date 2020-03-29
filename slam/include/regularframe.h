@@ -8,7 +8,7 @@
 using std::vector;
 using boost::circular_buffer;
 using std::shared_ptr;
-using Eigen::Vector2f;
+using Eigen::Vector3d;
 
 class RegularFrame {
 public:
@@ -16,8 +16,8 @@ public:
         int index1;
         int index2;
 
-        Vector2f p_left;
-        Vector2f p_right;
+        Vector3d p_left;
+        Vector3d p_right;
 
         int age;
         int reliability;
@@ -29,8 +29,8 @@ public:
 
         StablePoint(
                 int i1, int i2,
-                Vector2f p_left,
-                Vector2f p_right,
+                Vector3d p_left,
+                Vector3d p_right,
                 int age,
                 int reliability,
                 shared_ptr<circular_buffer<int>> buffer,
@@ -57,9 +57,14 @@ public:
     };
 
     /* complete stable point from previous */
-    void push_back(int i1, int i2, float u1, float v1, float u2, float v2, const StablePoint &previous);
+    void push_back(int i1, int i2,
+                   Eigen::Vector3d bearing_vector_left,
+                   Eigen::Vector3d bearing_vector_right,
+                   const RegularFrame::StablePoint &previous);
     /* initializate stable point */
-    void push_back(int i1, int i2, float u1, float v1, float u2, float v2);
+    void push_back(int i1, int i2,
+                   Eigen::Vector3d bearing_vector_left,
+                   Eigen::Vector3d bearing_vector_right);
 
     vector<StablePoint> points;
     Snapshot snapshot;
