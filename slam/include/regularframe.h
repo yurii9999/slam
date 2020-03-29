@@ -20,6 +20,8 @@ public:
         Vector2f p_right;
 
         int age;
+        int reliability;
+
         shared_ptr<circular_buffer<int>> buffer;
         int buffer_index;
 
@@ -30,22 +32,28 @@ public:
                 Vector2f p_left,
                 Vector2f p_right,
                 int age,
+                int reliability,
                 shared_ptr<circular_buffer<int>> buffer,
                 int buffer_index /* is it same thing as age? */
                 ):
             index1(i1), index2(i2),
             p_left(p_left), p_right(p_right),
             age(age),
+            reliability(reliability),
             buffer(buffer),
             buffer_index(buffer_index)
         {}
+
+        void increaseReliability() {
+            reliability++;
+        }
     };
 
     RegularFrame();
 
 //private:
+    // const Match::getFeatures ();
     struct Snapshot {
-
     };
 
     /* complete stable point from previous */
