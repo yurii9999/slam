@@ -3,3 +3,4 @@
 //
 
 #include "Scene.h"
+#include "regularframe.h"

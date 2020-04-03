@@ -3,13 +3,13 @@
 
 using std::vector;
 
-Eigen::Vector3d Tracker::normolize(Eigen::Vector2d a) {
+//Eigen::Vector3d Tracker::normolize(Eigen::Vector2d a) {
 
-    Eigen::Vector3d res((a[0] - cu) / focal, (a[1] - cv) / focal, 1);
-    res /= res.norm();
+//    Eigen::Vector3d res((a[0] - cu) / focal, (a[1] - cv) / focal, 1);
+//    res /= res.norm();
 
-    return res;
-}
+//    return res;
+//}
 
 void Tracker::push_back(const cv::Mat &img_l, const cv::Mat &img_r)
 {
@@ -47,9 +47,9 @@ void Tracker::push_back(uint8_t *I1,uint8_t* I2,int32_t* dims) {
     for (int i = 0; i < previous_indexs.size(); i++) {
         previous_indexs[i] = -1;
     }
-    for (int i = 0; i < previous->points.size(); i++) {
-        RegularFrame::StablePoint a = previous->points[i];
-        previous_indexs[a.index1] = i;
+    for (int i = 0; i < previous->amount_points(); i++) {
+        RegularFrame::feature_additional &a = previous->additionals[i];
+        previous_indexs[a.index_left] = i;
     }
 
     vector<Matcher::p_match> matches = matcher->getMatches();
@@ -60,15 +60,15 @@ void Tracker::push_back(uint8_t *I1,uint8_t* I2,int32_t* dims) {
         if (prev_index == -1) { /* if this landmark was not observed in the past */
 
             previous->push_back(match.i1p, match.i2p,
-                                normolize(Eigen::Vector2d(match.u1p, match.v1p)),
-                                normolize(Eigen::Vector2d(match.u2p, match.v2p)));
-            prev_index = previous->points.size() - 1;
+                                Eigen::Vector2d(match.u1p, match.v1p),
+                                Eigen::Vector2d(match.u2p, match.v2p));
+            prev_index = previous->amount_points() - 1;
         }
 
         /* complete */
         current->push_back(match.i1c, match.i2c,
-                           normolize(Eigen::Vector2d(match.u1c, match.v1c)),
-                           normolize(Eigen::Vector2d(match.u2c, match.v2c)),
-                           previous->points[prev_index]);
+                           Eigen::Vector2d(match.u1c, match.v1c),
+                           Eigen::Vector2d(match.u2c, match.v2c),
+                           RegularFrame::point_reference(previous.get(), prev_index));
     }
 }

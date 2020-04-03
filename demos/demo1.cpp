@@ -12,57 +12,16 @@
 using namespace std;
 using namespace cv;
 
-/*
-        max_features  = 2;
-        bucket_width  = 50;
-        bucket_height = 50;
-*/
-
-/* returns indexs of points that should be considered to egomotion estimation */
-vector<int> bucketing(int frame_widht, int frame_height, int widht, int height, int amount /* points per each bucket */, vector<RegularFrame::StablePoint> points) {
-    vector<int> result;
-    int rows = ceil((float)frame_height / height);
-    int collums = ceil((float)frame_widht / widht);
-    vector<vector<int>> buckets(rows * collums);
-
-    sort(
-                points.begin(),
-                points.end(),
-                [] (RegularFrame::StablePoint a, RegularFrame::StablePoint b) { return a.age > b.age; }
-    );
-
-    for (int i = 0; i < points.size(); i++) {
-        RegularFrame::StablePoint &cur_point = points[i];
-        int row = (int)(cur_point.p_left[0] / widht);
-        int collum = (int)(cur_point.p_left[1] / height);
-
-        int index = collum * collums + row;
-        if (buckets[index].size() > amount)
-            continue;
-
-        buckets[index].push_back(i);
-    }
-
-    for (auto bucket = buckets.begin(); bucket != buckets.end(); bucket++) {
-//        if (bucket->size() > amount) {
-//            bucket->erase(bucket->begin() + amount, bucket->end());
-//        }
-
-        for (int j = 0; j < bucket->size(); j++) {
-            int a = bucket->at(j);
-            result.push_back(a);
-        }
-    }
-
-    return result;
-}
-
 Scalar getColor(int seed) {
     return Scalar(
                 seed * 2 % 255,
                 seed * 3 % 255,
                 seed * 5 % 255
                 );
+}
+
+Point vectorToCv(Eigen::Vector2d v) {
+    return Point(v[0], v[1]);
 }
 
 /* something taken form libviso */
@@ -92,7 +51,7 @@ int main (int argc, char** argv) {
 
     cv::Mat img_l;
     cv::Mat img_r;
-    for (int32_t i=0; i<20; i++) {
+    for (int32_t i=0; i<200; i++) {
        char base_name[256]; sprintf(base_name,"%06d.png",i);
        string left_img_file_name  = dir + "/I1_" + base_name;
        string right_img_file_name = dir + "/I2_" + base_name;
@@ -107,51 +66,33 @@ int main (int argc, char** argv) {
 
 //    vector<int> result = bucketing(img_l.size[1], img_l.size[0], 50, 50, 2, last_frame.points);
     vector<int> result;
-    for (int i = 0; i < last_frame.points.size(); i++) {
+    for (int i = 0; i < last_frame.amount_points(); i++) {
         result.push_back(i);
     }
     cout << result.size() << endl;
 
-    for (int i = 0 ; i < result.size(); i++) {
-        RegularFrame::StablePoint &p = last_frame.points[result[i]];
+    for (int i = 0; i < result.size(); i++) {
+        RegularFrame::feature_additional p = last_frame.additionals[result[i]];
 
         if (p.age < 5)
             continue;
 
-        Scalar color = getColor(p.age + p.index1 + p.index2); /* emulating random */
-        circle(img_l, Point(p.p_left[0], p.p_left[1]), 3, color, 2);
-        circle(img_r, Point(p.p_right[0], p.p_right[1]), 3, color, 2);
+        Scalar color = getColor(p.age + p.index_left + p.index_right); /* emulating random */
 
-        circular_buffer<int> &buff = *(p.buffer);
-        for (int i = 1; i < p.age; i++) {
-            int index = *(buff.end() - 1 - i);
-            RegularFrame::StablePoint previous_observation = (*(frames.end() - 1 - i))->points[index];
-            circle(img_l, Point(previous_observation.p_left[0], previous_observation.p_left[1]), 3, color);
-            circle(img_r, Point(previous_observation.p_right[0], previous_observation.p_right[1]), 3, color);
+        circle(img_l, vectorToCv(last_frame.image_points_left[p.index]), 3, color, 2);
+        circle(img_r, vectorToCv(last_frame.image_points_right[p.index]), 3, color, 2);
+
+        RegularFrame::PointCommon &common = *p.common;
+        for (int i = 0 ; i < common.buffer.size(); i++) {
+            RegularFrame::point_reference &ref = common.buffer[i];
+
+            RegularFrame &f = *ref.frame;
+            int index = ref.index;
+
+            circle(img_l, vectorToCv(f.image_points_left[index]), 3, color);
+            circle(img_r, vectorToCv(f.image_points_right[index]), 3, color);
         }
-
     }
-//       for (vector<RegularFrame::StablePoint>::iterator it = last_frame.points.begin();
-//         it < last_frame.points.end();
-//         it++) {
-
-////        if (it->age < 5)
-////            continue;
-
-//        Scalar color = getColor(it->age + it->index1 + it->index2); /* emulating random */
-//        circle(img_l, Point(it->p_left[0], it->p_left[1]), 3, color);
-//        circle(img_r, Point(it->p_right[0], it->p_right[1]), 3, color);
-
-        /* draw point(u, v)*/
-//        circular_buffer<int> &buff = *(it->buffer);
-
-//        for (int i = 1; i < it->age; i++) {
-//            int index = *(buff.end() - 1 - i);
-//            RegularFrame::StablePoint previous_observation = (*(frames.end() - 1 - i))->points[index];
-//            circle(img_l, Point(previous_observation.p_left[0], previous_observation.p_left[1]), 3, color);
-//            circle(img_r, Point(previous_observation.p_right[0], previous_observation.p_right[1]), 3, color);
-//        }
-//    }
 
     vconcat(img_l, img_r, img_l);
     imwrite("resultllllll.png", img_l);
