@@ -51,8 +51,10 @@ struct input_parameters
     double cv = 0.;
     double base = 0.; // meters
 
+    int amount_frames = -1;
+
     vector<double> parse_calib_params(string line) {
-        line.erase(line.begin(), line.begin() + 4);
+        line.erase(line.begin(), line.begin() + 4); /* "P0: " */
 
         std::istringstream iss(line);
 
@@ -75,6 +77,12 @@ struct input_parameters
         else
             calib_filename = sequence_path + "/calib.txt";
 
+        rapidxml::xml_node<> *amount_frames_n = doc.first_node("amount_frames");
+        if (amount_frames_n)
+            amount_frames = stoi(amount_frames_n->value());
+        else
+            amount_frames = -1;
+
         /* parse calibration parameters */
         ifstream input;
         input.open(calib_filename);
@@ -96,7 +104,9 @@ struct input_parameters
 };
 
 /* something taken form libviso */
+
 /* --parameters="../../something" --input="../../sequence" */
+
 int main (int argc, char** argv) {
     cxxopts::Options options("Something", "try to use on kitti dataset");
     options.add_options()
@@ -121,7 +131,9 @@ int main (int argc, char** argv) {
 
     Tracker tracker(f, cu, cv, params_matcher);
 
-    EgomotionEstimation ego(f, cu, cv, base);
+    EgomotionEstimation ego(f, cu, cv, base,
+                            params.ransac_threshold,
+                            params.ransac_max_iterations);
 
     vector<shared_ptr<RegularFrame>> frames;
 
@@ -130,31 +142,48 @@ int main (int argc, char** argv) {
 
     cv::Mat img_l;
     cv::Mat img_r;
-    for (int32_t i_frame =0; i_frame < 500; i_frame ++) {
-       char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
-       string left_img_file_name  = left_img_dir + image_name;
-       string right_img_file_name = right_img_dir + image_name;
-       img_l = imread(left_img_file_name);
-       img_r = imread(right_img_file_name);
 
-       tracker.push_back(img_l, img_r);
-       frames.push_back(tracker.current);
+    Sophus::SE3d delta;
 
-       RegularFrame &current_frame = *tracker.current;
-       if (i_frame  == 0) {
-           /* initialize first frame on origin */
-           SE3d origin;
-           current_frame.set_motion(origin);
+    vector<Sophus::SE3d> poses;
 
-           continue;
-       }
+    int i_frame = 0;
+    do {
+        char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
+        string left_img_file_name  = left_img_dir + image_name;
+        string right_img_file_name = right_img_dir + image_name;
+        img_l = imread(left_img_file_name, CV_LOAD_IMAGE_GRAYSCALE);
+        img_r = imread(right_img_file_name, CV_LOAD_IMAGE_GRAYSCALE);
 
-       RegularFrame &previous_frame = *tracker.previous;
+        /* works strange..... */
+//        if (i_frame > 1) { /* could make motion prediction */
+//            tracker.push_back(img_l, img_r, &delta);
+//        }
+//        else
+        tracker.push_back(img_l, img_r);
 
-       ego.estimate_motion(current_frame, previous_frame);
-       cout << "i = " << i_frame << "\t correspondences: " << ego.amount_correspondences << "\t Inliers: " << ego.amount_inliers << endl;
+        frames.push_back(tracker.current);
 
-    }
+        RegularFrame &current_frame = *tracker.current;
+        if (i_frame  == 0) {
+            /* initialize first frame on origin */
+            SE3d origin;
+            current_frame.set_motion(origin);
+            i_frame++;
+            continue;
+        }
+
+        RegularFrame &previous_frame = *tracker.previous;
+
+        ego.estimate_motion(current_frame, previous_frame);
+        cout << "EgomotionEstimation: i = " << i_frame << "\t correspondences: " << ego.amount_correspondences << "\t Inliers: " << ego.amount_inliers << endl;
+
+        delta = current_frame.motion * previous_frame.motion.inverse();
+
+        poses.push_back(delta);
+
+        i_frame++;
+    } while(img_l.data && i_frame != input_params.amount_frames);
 
     ofstream output;
     output.open("result_scene");
@@ -172,6 +201,20 @@ int main (int argc, char** argv) {
     }
 
     output.close();
+
+
+
+    output.open("result_pose_relatives");
+    Sophus::SE3d current;
+    output << current.translation().transpose() << endl;
+    for (int i = 0; i < poses.size(); i++) {
+        current = poses[i] * current;
+        output << current.translation().transpose() << endl;
+    }
+
+    output.close();
+
+
 
     return 0;
 }

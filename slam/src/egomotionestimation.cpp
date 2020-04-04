@@ -94,8 +94,6 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
         adapter,
         opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::GP3P));
     ransac.sac_model_ = absposeproblem_ptr;
-    ransac.threshold_ = (1.0 - cos(atan(sqrt(2.0)*0.5/focal))) * 3; /* these hardcoded parameters */
-    ransac.max_iterations_ = 100;
 
     ransac.computeModel();
 
@@ -106,9 +104,10 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
 
     SE3d m(t.block<3,3>(0,0), t.col(3));
 
+    /* push_back in scene inliers only that is not in scene yet */
+
     /* correspondences is 3D global point - (left 2d, right 2d) feature corespondences;
        inliers -- 3D global - left(or right) 2d feature corespondences */
-
     vector<int> is_inlier(amount_correspondences, -1);
     for (size_t inl_idx : ransac.inliers_)
         is_inlier[inl_idx % amount_correspondences] = inl_idx % amount_correspondences;

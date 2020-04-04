@@ -40,12 +40,18 @@ public:
         this->cv = cv;
         this->base = base;
 
+        ransac.threshold_ = (1.0 - cos(atan(sqrt(2.0)*0.5/focal)));
+        ransac.max_iterations_ = 100;
+
         camOffsets.resize(2); camRotations.resize(2);
         camOffsets[0] = opengv::translation_t(0, 0, 0); camOffsets[1] = opengv::translation_t(0, base, 0);
         camRotations[0] = Eigen::Matrix3d::Identity(); camRotations[1] = Eigen::Matrix3d::Identity();
     }
 
-    /* TODO: constructor with ransacs' parameters; Now use hardcoded defaults */
+    EgomotionEstimation(double focal, double cu, double cv, double base, double ransac_threshold, int ransac_max_iterations) : EgomotionEstimation(focal, cu, cv, base) {
+        ransac.threshold_ = ransac_threshold;
+        ransac.max_iterations_ = ransac_max_iterations;
+    }
 
     void estimate_motion(RegularFrame &curr, RegularFrame &prev);
 };

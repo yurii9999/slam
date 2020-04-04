@@ -27,8 +27,8 @@ public:
         delete matcher;
     }
 
-    void push_back(const Mat &img_l, const Mat &img_r);
-    void push_back(uint8_t *I1,uint8_t* I2,int32_t* dims);
+    void push_back(const Mat &img_l, const Mat &img_r, SE3d *prediction = nullptr);
+    void push_back(uint8_t *I1,uint8_t* I2,int32_t* dims, SE3d *prediction = nullptr);
 
 //private:
     /* transform image point to bearing vector(openGV terminology) -- unit vector from camera's center */
