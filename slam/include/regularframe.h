@@ -5,6 +5,8 @@
 #include <eigen3/Eigen/Core>
 #include <memory>
 
+#include "opengv/types.hpp"
+
 #include "sophus/se3.hpp"
 
 using std::vector;
@@ -113,6 +115,12 @@ public:
 
         RegularFrame::feature_additional &getAdditional() const { return frame->additionals[index]; }
 
+        opengv::bearingVector_t get_bearing_vector_left() { return frame->bearingVectors_left[index]; }
+        opengv::bearingVector_t get_bearing_vector_right() { return frame->bearingVectors_right[index]; }
+
+        opengv::point_t get_point_3d() { return frame->additionals[index].common->landmark; }
+
+
         point_reference &operator =(const point_reference &another) {
             this->frame = another.frame;
             this->index = another.index;
@@ -148,6 +156,8 @@ public:
         PointCommon() {
             already_triangulated = false;
             is_in_scene = false;
+            disparity = 0;
+
             buffer.set_capacity(64);
         }
 

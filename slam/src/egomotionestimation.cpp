@@ -26,11 +26,7 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
 
         double disparity = fmax(abs(p_l[0] - p_r[0]), 0.0001);
 
-        /* now triangulate only close points */
-        if (disparity < 5 * base)
-            continue;
-
-        if (disparity > p.common->disparity || !p.common->already_triangulated) {
+        if (disparity > p.common->disparity) {
             Vector3d X(
                     (p_l[0] - cu) * base / disparity,
                     (p_l[1] - cv) * base / disparity,
@@ -40,96 +36,70 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
         }
     }
 
-
-    /* building opengv's adapter */
-    /* use only point that is observed on current frame and is triangulated (now: <=> is not far) */
-    int amount_correspondences = 0;
+    /* now select all point that was stable triangulated (Triangulated with disparity less than 40 * baseline) */
+    selection.clear();
     for (auto v : current_frame.additionals)
-        if (v.common->already_triangulated)
-            amount_correspondences++;
-
-    opengv::bearingVectors_t bearing_vectors(2 * amount_correspondences);
-    opengv::points_t points(2 * amount_correspondences);
-
-    vector<int> camCorrespondence(2 * amount_correspondences);
-    for (int i = 0; i < amount_correspondences; i++) {
-        camCorrespondence[i] = 0;
-        camCorrespondence[amount_correspondences + i] = 1;
-    }
-
-    correspondences.clear();
-    correspondences.resize(amount_correspondences);
-
-    int i = 0;
-    for (auto v : current_frame.additionals) {
-        if (!v.common->already_triangulated)
-            continue;
-
-        correspondences[i] = RegularFrame::point_reference(&current_frame, v.index);
-
-        bearing_vectors[i] = current_frame.bearingVectors_left[v.index];
-        bearing_vectors[amount_correspondences + i] = current_frame.bearingVectors_right[v.index];
-
-        points[i] = v.common->landmark;
-        points[amount_correspondences + i] = v.common->landmark;
-
-        i++;
-    }
-
-    this->amount_correspondences = amount_correspondences;
-
+        if (v.common->disparity > 40 * base)
+            selection.push_back(RegularFrame::point_reference(&current_frame, v.index));
 
     /* motion estimation */
-    opengv::absolute_pose::NoncentralAbsoluteAdapter adapter(
-                bearing_vectors,
-                camCorrespondence,
-                points,
-                camOffsets,
-                camRotations);
-//    opengv::absolute_pose::CentralAbsoluteAdapter adapter (
-//                bearing_vectors,
-//                points);
+    opengv::absolute_pose::NoncentralAbsoluteAdapter *adapter = build_adapter();
 
     std::shared_ptr<
         opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
         new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
-        adapter,
-        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::GP3P)); /* ! */
+        *adapter,
+        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::GP3P));
     ransac.sac_model_ = absposeproblem_ptr;
 
     ransac.computeModel();
 
     amount_inliers = ransac.inliers_.size();
 
-    opengv::transformations_t ts = opengv::absolute_pose::upnp(adapter, ransac.inliers_);
+    opengv::transformations_t ts = opengv::absolute_pose::upnp(*adapter, ransac.inliers_);
     opengv::transformation_t t = ts[0];
-//    opengv::transformation_t t = opengv::absolute_pose::epnp(adapter, ransac.inliers_);
 
     SE3d m(t.block<3,3>(0,0), t.col(3));
+    current_frame.set_motion(m);
 
-    /* push_back in scene inliers only that is not in scene yet */
+    delete adapter;
+}
 
-    /* correspondences is 3D global point - (left 2d, right 2d) feature corespondences;
-       inliers -- 3D global - left(or right) 2d feature corespondences */
-    vector<int> is_inlier(amount_correspondences, -1);
-    for (size_t inl_idx : ransac.inliers_)
-        is_inlier[inl_idx % amount_correspondences] = inl_idx % amount_correspondences;
+/* building opengv ' s adapter */
+opengv::absolute_pose::NoncentralAbsoluteAdapter *EgomotionEstimation::build_adapter()
+{
+    bearing_vectors.clear();
+    bearing_vectors.resize(2 * selection.size());
 
-    for (size_t idx : is_inlier) {
-        if (idx == -1)
-            continue;
+    points.clear();
+    points.resize(2 * selection.size());
 
-        RegularFrame::point_reference &correspondence = correspondences[idx];
-        shared_ptr<RegularFrame::PointCommon> p = correspondence.frame->additionals[correspondence.index].common;
+    int i = 0;
+    for (auto v : selection) {
+        bearing_vectors[i] = v.get_bearing_vector_left();
+        bearing_vectors[selection.size() + i] = v.get_bearing_vector_right();
 
-        if (p->in_scene())
-            continue;
-        if (p->disparity < base * 40)
-            continue;
-
-        scene.push_back(p);
-        p->add_to_scene();
+        points[i] = v.get_point_3d();
+        points[selection.size() + i] = v.get_point_3d();
+        i++;
     }
 
-    current_frame.set_motion(m);
+    camCorrespondence.clear();
+    camCorrespondence.resize(2 * selection.size());
+    for (int i = 0; i < selection.size(); i++) {
+        camCorrespondence[i] = 0;
+        camCorrespondence[selection.size() + i] = 1;
+    }
+
+    return new opengv::absolute_pose::NoncentralAbsoluteAdapter(
+                bearing_vectors,
+                camCorrespondence,
+                points,
+                camOffsets,
+                camRotations);
+}
+
+void EgomotionEstimation::select_points()
+{
+
 }

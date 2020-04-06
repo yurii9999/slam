@@ -30,9 +30,8 @@ public:
     double cv;
     double base;
 
-    /* additional output */
-    vector<RegularFrame::point_reference> correspondences;
-    int amount_correspondences;
+    /* additional */
+    vector<RegularFrame::point_reference> selection;
     int amount_inliers;
 
     EgomotionEstimation(double focal, double cu, double cv, double base) {
@@ -57,6 +56,8 @@ public:
     void estimate_motion(RegularFrame &curr, RegularFrame &prev);
 
 private:
+    int close_coeff = 40;
+    int far_coeff = 10; /* points with disparity less than far_coeff * baseline is far */
     /* Classification of points on current frame */
     /* For estimate Rotation from far points, and translation from close */
     vector<int> infinity_points;
@@ -67,4 +68,9 @@ private:
     void select_points();
     opengv::absolute_pose::NoncentralAbsoluteAdapter *build_adapter();
     void ransac_procedure();
+
+    /* opengv adapter*/
+    opengv::bearingVectors_t bearing_vectors;
+    opengv::points_t points;
+    vector<int> camCorrespondence;
 };

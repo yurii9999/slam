@@ -176,7 +176,7 @@ int main (int argc, char** argv) {
         RegularFrame &previous_frame = *tracker.previous;
 
         ego.estimate_motion(current_frame, previous_frame);
-        cout << "EgomotionEstimation: i = " << i_frame << "\t correspondences: " << ego.amount_correspondences << "\t Inliers: " << ego.amount_inliers << endl;
+        cout << "EgomotionEstimation: i = " << i_frame << "\t correspondences: " << ego.selection.size() << "\t Inliers: " << ego.amount_inliers << endl;
 
         delta = current_frame.motion * previous_frame.motion.inverse();
 
