@@ -197,24 +197,25 @@ int main (int argc, char** argv) {
 
     output.open("result_pose");
     for (int i = 0; i < frames.size(); i++) {
+        double *a = frames[i]->motion.matrix3x4().data();
+        /* data now is [r00, .. r22 t1 t2 t3], so need to do this: */
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++)
+                output << a[i * 3 + j] << " ";
+            output << a[9 + i] << " ";
+        }
+
+        output << endl;
+
+    }
+
+    output.close();
+
+    output.open("res_pose1");
+    for (int i =0 ; i < frames.size(); i++)
         output << frames[i]->motion.translation().transpose() << endl;
-    }
 
     output.close();
-
-
-
-    output.open("result_pose_relatives");
-    Sophus::SE3d current;
-    output << current.translation().transpose() << endl;
-    for (int i = 0; i < poses.size(); i++) {
-        current = poses[i] * current;
-        output << current.translation().transpose() << endl;
-    }
-
-    output.close();
-
-
 
     return 0;
 }

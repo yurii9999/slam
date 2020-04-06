@@ -7,6 +7,7 @@
 #include "opengv/types.hpp"
 #include "opengv/sac/Ransac.hpp"
 #include "opengv/sac_problems/absolute_pose/AbsolutePoseSacProblem.hpp"
+#include "opengv/absolute_pose/NoncentralAbsoluteAdapter.hpp"
 
 using std::vector;
 using std::shared_ptr;
@@ -44,7 +45,7 @@ public:
         ransac.max_iterations_ = 100;
 
         camOffsets.resize(2); camRotations.resize(2);
-        camOffsets[0] = opengv::translation_t(0, 0, 0); camOffsets[1] = opengv::translation_t(0, base, 0);
+        camOffsets[0] = opengv::translation_t(0, 0, 0); camOffsets[1] = opengv::translation_t(base, 0, 0);
         camRotations[0] = Eigen::Matrix3d::Identity(); camRotations[1] = Eigen::Matrix3d::Identity();
     }
 
@@ -54,4 +55,16 @@ public:
     }
 
     void estimate_motion(RegularFrame &curr, RegularFrame &prev);
+
+private:
+    /* Classification of points on current frame */
+    /* For estimate Rotation from far points, and translation from close */
+    vector<int> infinity_points;
+    vector<int> far_points;
+    vector<int> close_points;
+    vector<int> others;
+
+    void select_points();
+    opengv::absolute_pose::NoncentralAbsoluteAdapter *build_adapter();
+    void ransac_procedure();
 };

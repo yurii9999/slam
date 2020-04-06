@@ -13,7 +13,6 @@
 
 using namespace std;
 
-
 void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame) {
     /* compute bearing vectors */
     previous_frame.compute_bearing_vectors(focal, cu, cv);
@@ -28,7 +27,7 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
         double disparity = fmax(abs(p_l[0] - p_r[0]), 0.0001);
 
         /* now triangulate only close points */
-        if (disparity < base)
+        if (disparity < 5 * base)
             continue;
 
         if (disparity > p.common->disparity || !p.common->already_triangulated) {
@@ -87,12 +86,15 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
                 points,
                 camOffsets,
                 camRotations);
+//    opengv::absolute_pose::CentralAbsoluteAdapter adapter (
+//                bearing_vectors,
+//                points);
 
     std::shared_ptr<
         opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
         new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
         adapter,
-        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::GP3P));
+        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::GP3P)); /* ! */
     ransac.sac_model_ = absposeproblem_ptr;
 
     ransac.computeModel();
@@ -101,6 +103,7 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
 
     opengv::transformations_t ts = opengv::absolute_pose::upnp(adapter, ransac.inliers_);
     opengv::transformation_t t = ts[0];
+//    opengv::transformation_t t = opengv::absolute_pose::epnp(adapter, ransac.inliers_);
 
     SE3d m(t.block<3,3>(0,0), t.col(3));
 
