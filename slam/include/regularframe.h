@@ -24,8 +24,8 @@ public:
     struct point_reference;
     struct feature_additional;
 
-    vector<Vector3d> bearingVectors_left;
-    vector<Vector3d> bearingVectors_right;
+    opengv::bearingVectors_t bearingVectors_left;
+    opengv::bearingVectors_t bearingVectors_right;
 
     vector<Vector2d> image_points_left;
     vector<Vector2d> image_points_right;
@@ -92,6 +92,8 @@ public:
         double disparity;
 
         shared_ptr<PointCommon> common; /* common information about feature for each point */
+
+        RegularFrame::point_reference &get_it_on_previous() { return common->buffer[common->buffer.size() - 2]; }
     };
 
     // TODO: create const Match::getFeatures (); in libviso to get snapshot of current frame
@@ -113,10 +115,23 @@ public:
             index = -1;
         }
 
+        RegularFrame::PointCommon &get_common() { return *(frame->additionals[index].common); }
+
         RegularFrame::feature_additional &getAdditional() const { return frame->additionals[index]; }
+
+        /* add asserts */
+
+        /* is ??? it  good to have fast correspondences between current and previous frames */
+        RegularFrame::point_reference get_previous_frame_refference() {
+            circular_buffer<RegularFrame::point_reference> *b = &(frame->additionals[index].common->buffer);
+            return b->at(b->size() - 2); /* do in other way */
+        }
 
         opengv::bearingVector_t get_bearing_vector_left() { return frame->bearingVectors_left[index]; }
         opengv::bearingVector_t get_bearing_vector_right() { return frame->bearingVectors_right[index]; }
+
+        Vector2d get_image_point_left() { return frame->image_points_left[index]; }
+        Vector2d get_image_point_right() { return frame->image_points_right[index]; }
 
         opengv::point_t get_point_3d() { return frame->additionals[index].common->landmark; }
 
