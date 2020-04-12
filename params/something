@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<ransac_max_iterations>1000</ransac_max_iterations>
+<ransac_threshold>0.0000005</ransac_threshold>
+<far_coeff>10000000</far_coeff>
+<close_coeff>-1</close_coeff>
+<inliers_determination_policy>ANGEL_BETWEEN_RAYS</inliers_determination_policy>
+<final_threshold>0.00001</final_threshold>
+<triangulation_policy>WITH_BEST_DISPARITY</triangulation_policy>
+<using_nonlinear_optimization>1</using_nonlinear_optimization>
+<motion_prediction>0</motion_prediction>
+<save_images>1</save_images>
+<save_dir>dest</save_dir>
+
+<bucketing_size>50</bucketing_size>
+<bucketing_amount>10000</bucketing_amount>

@@ -37,10 +37,12 @@ struct parameters
     const double ft_reprojection_error_default = 1.;
     const double ft_angel_between_rays_default = 0.01;
 
+    double far_coeff = 10;
+    double close_coeff = 40;
 
-    double farthest_coeff = 40; // points that have debth more than it will not be used in egomotion estimation; надо посчитать через disparity и тд чему он должен быть равен
+    int bucketing_amount = 2;
+    int bucketing_size = 50;
 
-    EgomotionEstimation::configuration::selection_policy selection_policy_ = EgomotionEstimation::configuration::selection_policy::SELECT_ALL;
     EgomotionEstimation::configuration::inliers_determination_policy inliers_determination_policy_ = EgomotionEstimation::configuration::inliers_determination_policy::REPROJECTION_ERROR;
     EgomotionEstimation::configuration::triangulation_policy triangulation_policy_ = EgomotionEstimation::configuration::triangulation_policy::FROM_PREVIOUS_FRAME;
 
@@ -64,25 +66,13 @@ struct parameters
         if (rth)
             ransac_threshold = stod(rth->value());
 
-        xml_node<> *sp = doc.first_node("selection_policy");
-        if (sp) {
-            string val(sp->value());
-            if (val == "SELECT_ALL" || val == "0") {
-                selection_policy_ = EgomotionEstimation::configuration::selection_policy::SELECT_ALL;
-            }
-            else {
-                if (val == "SELECT_CLOSE" || val == "1") {
-                    selection_policy_ = EgomotionEstimation::configuration::selection_policy::SELECT_CLOSE;
-                }
-                else if (val == "SELECT_FAR" || val == "2")
-                    selection_policy_ = EgomotionEstimation::configuration::selection_policy::SELECT_FAR;
-
-            }
-        }
-
-        xml_node<> *fc = doc.first_node("farthest_coeff");
+        xml_node<> *fc = doc.first_node("far_coeff");
         if (fc)
-            farthest_coeff = stod(fc->value());
+            far_coeff = stod(fc->value());
+
+        xml_node<> *cc = doc.first_node("close_coeff");
+        if (cc)
+            close_coeff = stod(cc->value());
 
         xml_node<> *idp = doc.first_node("inliers_determination_policy");
         if (idp) {
@@ -119,6 +109,14 @@ struct parameters
         if (mp)
             try_predict_motion = stoi(mp->value());
 
+        xml_node<> *bs = doc.first_node("bucketing_size");
+        if (bs)
+            bucketing_size = stoi(bs->value());
+
+        xml_node<> *ba = doc.first_node("bucketing_amount");
+        if (ba)
+            bucketing_amount = stoi(ba->value());
+
         rapidxml::xml_node<> *output_images_node = doc.first_node("save_images");
         if (output_images_node) {
             output_images = stoi(output_images_node->value());
@@ -140,9 +138,8 @@ struct parameters
         cout << "ransac_max_iterations: " << ransac_max_iterations << endl;
         cout << "ransac_threshold: " << ransac_threshold << endl;
         cout << "final_threshold: " << final_threshold << endl;
-        cout << "farthest_coeff: " << farthest_coeff << endl;
-        string selection_policy_str [] = {"SELECT_ALL" , "SELECT_CLOSE", "SELECT_FAR"};
-        cout << "selection_policy: " << selection_policy_str[selection_policy_] << endl;
+        cout << "far_coeff: " << far_coeff << endl;
+        cout << "close_coeff: " << close_coeff << endl;
 
         string inliers_determination_policy_str [] = {"ANGEL_BETWEEN_RAYS", "REPROJECTION_ERROR"};
         cout << "inliers_determination_policy: " << inliers_determination_policy_str[inliers_determination_policy_] << endl;
@@ -152,6 +149,9 @@ struct parameters
 
         cout << "using_nonlinear_optimization: " << using_nonlinear_optimization << endl;
         cout << "try_predict_motion: " << try_predict_motion << endl;
+
+        cout << "Bucketing amount features per cell: " << bucketing_amount << endl;
+        cout << "Bucketing cell size: " << bucketing_size << endl;
 
         cout << "==========" << endl;
         if (output_images)
@@ -169,6 +169,8 @@ struct input_parameters
     double base = 0.; // meters
 
     int amount_frames = -1;
+
+    int first_frame = 0;
 
     vector<double> parse_calib_params(string line) {
         line.erase(line.begin(), line.begin() + 4); /* "P0: " */
@@ -196,8 +198,10 @@ struct input_parameters
         rapidxml::xml_node<> *amount_frames_n = doc.first_node("amount_frames");
         if (amount_frames_n)
             amount_frames = stoi(amount_frames_n->value());
-        else
-            amount_frames = -1;
+
+        rapidxml::xml_node<> *ff = doc.first_node("first_frame");
+        if (ff)
+            first_frame = stoi(ff->value());
 
         /* parse calibration parameters */
         ifstream input;
@@ -221,6 +225,7 @@ struct input_parameters
     void print() {
         cout << "Sequence parameters: " << endl;
         cout << "path: " << sequence_path << endl;
+        cout << "first frame: " << first_frame << endl;
         if (amount_frames > 0) cout << "first " << amount_frames << " frames" << endl;
         cout << "calibration file path: " << calib_filename << endl;
         cout << "Calibrations: " << endl;
@@ -231,8 +236,152 @@ struct input_parameters
     }
 };
 
-/* something taken form libviso */
+Mat somedrawing_A(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
+    Mat res_l, res_r;
+    cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
+    cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
 
+    vector<Scalar> colors(current_frame.additionals.size(), Scalar(0, 0, 128));
+    for (auto idx : ego.inliers)
+        colors[idx] = Scalar(0, 128, 0);
+
+    for (auto p : ego.selection)
+        colors[p.index] = colors[p.index] * 2;
+
+
+    for (auto p : current_frame.additionals) {
+        Vector2d l = current_frame.image_points_left[p.index];
+        Vector2d r = current_frame.image_points_right[p.index];
+        circle(res_l, Point(l[0], l[1]), 3, colors[p.index], 2);
+        circle(res_r, Point(r[0], r[1]), 3, colors[p.index], 2);
+    }
+
+    for (auto idx : ego.ransac.inliers_) {
+        if (idx < ego.selection.size()) {
+            Vector2d l = current_frame.image_points_left[ego.selection[idx].index];
+            circle(res_l, Point(l[0], l[1]), 3, Scalar(255, 0, 0), 2);
+        }
+        else {
+            Vector2d r = current_frame.image_points_right[ego.selection[idx - ego.selection.size()].index];
+            circle(res_r, Point(r[0], r[1]), 3, Scalar(255, 0, 0), 2);
+        }
+    }
+
+
+    vconcat(res_l, res_r, res_l);
+    return res_l;
+}
+
+Mat somedrawing_B0reproj(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
+    int resize_coeff_u = 4;
+    int resize_coeff_v = 4;
+    Mat res_l, res_r;
+    cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
+    cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
+
+    resize(res_l, res_l, Size(res_l.cols * resize_coeff_u, res_l.rows * resize_coeff_v));
+    resize(res_r, res_r, Size(res_r.cols * resize_coeff_u, res_r.rows * resize_coeff_v));
+
+    Scalar color(255, 0, 0);
+
+    for (auto p : current_frame.additionals) {
+        Vector2d l = current_frame.image_points_left[p.index];
+        Vector2d r = current_frame.image_points_right[p.index];
+
+        stringstream ss1;
+        ss1.setf(ios::fixed);
+        ss1.precision(1);
+        ss1 << ego.residual_l[p.index];
+
+        stringstream ss2;
+        ss2.setf(ios::fixed);
+        ss2.precision(1);
+        ss2 << ego.residual_r[p.index];
+
+        putText(res_l, ss1.str(), Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
+        circle(res_l, Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), 2, color);
+        putText(res_r, ss2.str(), Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
+        circle(res_r, Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), 2, color);
+    }
+
+    vconcat(res_l, res_r, res_l);
+    return res_l;
+}
+
+Mat somedrawing_B1disp(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
+    int resize_coeff_u = 4;
+    int resize_coeff_v = 4;
+    Mat res_l, res_r;
+    cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
+    cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
+
+    resize(res_l, res_l, Size(res_l.cols * resize_coeff_u, res_l.rows * resize_coeff_v));
+    resize(res_r, res_r, Size(res_r.cols * resize_coeff_u, res_r.rows * resize_coeff_v));
+
+    Scalar color(0, 255, 0);
+
+    for (auto p : current_frame.additionals) {
+        Vector2d l = current_frame.image_points_left[p.index];
+        Vector2d r = current_frame.image_points_right[p.index];
+
+        stringstream ss1;
+        ss1.setf(ios::fixed);
+        ss1.precision(3);
+        ss1 << ego.disparities[p.index];
+
+        stringstream ss2;
+        ss2.setf(ios::fixed);
+        ss2.precision(1);
+        ss2 << ego.disparities[p.index];
+
+        putText(res_l, ss1.str(), Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
+        circle(res_l, Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), 2, color);
+        putText(res_r, ss2.str(), Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
+        circle(res_r, Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), 2, color);
+    }
+
+    vconcat(res_l, res_r, res_l);
+    return res_l;
+}
+
+Mat somedrawing_B2angle(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
+    int resize_coeff_u = 4;
+    int resize_coeff_v = 4;
+    Mat res_l, res_r;
+    cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
+    cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
+
+    resize(res_l, res_l, Size(res_l.cols * resize_coeff_u, res_l.rows * resize_coeff_v));
+    resize(res_r, res_r, Size(res_r.cols * resize_coeff_u, res_r.rows * resize_coeff_v));
+
+    Scalar color(0, 0, 255);
+
+    for (auto p : current_frame.additionals) {
+        Vector2d l = current_frame.image_points_left[p.index];
+        Vector2d r = current_frame.image_points_right[p.index];
+
+        stringstream ss1;
+        ss1.setf(ios::fixed);
+        ss1.precision(8);
+        ss1 << ego.residual_l[p.index];
+
+        stringstream ss2;
+        ss2.setf(ios::fixed);
+        ss2.precision(8);
+        ss2 << ego.residual_r[p.index];
+
+        putText(res_l, ss1.str(), Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
+        circle(res_l, Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), 2, color);
+        putText(res_r, ss2.str(), Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
+        circle(res_r, Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), 2, color);
+    }
+
+    vconcat(res_l, res_r, res_l);
+    return res_l;
+}
+
+
+/* something taken form libviso */
 /* --parameters="../../something" --input="../../sequence" */
 
 int main (int argc, char** argv) {
@@ -262,20 +411,25 @@ int main (int argc, char** argv) {
     params_matcher.cv = cv;
     params_matcher.base = base;
     params_matcher.f = f;
-    params_matcher.refinement = 2;
+    params_matcher.refinement = 1;
 
     Tracker tracker(f, cu, cv, params_matcher); /* tracker does not need f, cu cv; only matcher need */
 
     EgomotionEstimation::configuration c(
-                params.selection_policy_,
                 params.inliers_determination_policy_,
                 params.triangulation_policy_,
                 params.using_nonlinear_optimization,
                 params.ransac_threshold,
                 params.ransac_max_iterations,
-                params.final_threshold,
-                params.farthest_coeff
+                params.final_threshold
                 );
+    c.bucketing_height = params.bucketing_size;
+    c.bucketing_widht = params.bucketing_size;
+    c.bucketing_amount = params.bucketing_amount;
+
+    c.close_coeff = params.close_coeff;
+    c.far_coeff = params.far_coeff;
+
     EgomotionEstimation ego(f, cu, cv, base, c);
 
 
@@ -289,9 +443,7 @@ int main (int argc, char** argv) {
 
     Sophus::SE3d delta;
 
-    vector<Sophus::SE3d> poses;
-
-    int i_frame = 0;
+    int i_frame = input_params.first_frame;
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
         string left_img_file_name  = left_img_dir + image_name;
@@ -300,7 +452,7 @@ int main (int argc, char** argv) {
         img_r = imread(right_img_file_name, CV_LOAD_IMAGE_GRAYSCALE);
 
         /* works strange..... */
-        if (i_frame > 1 && params.try_predict_motion) /* could make motion prediction */
+        if (i_frame > input_params.first_frame + 1 && params.try_predict_motion) /* could make motion prediction */
             tracker.push_back(img_l, img_r, &delta);
         else
             tracker.push_back(img_l, img_r);
@@ -308,10 +460,7 @@ int main (int argc, char** argv) {
         frames.push_back(tracker.current);
 
         RegularFrame &current_frame = *tracker.current;
-        if (i_frame  == 0) {
-            /* initialize first frame on origin */
-            SE3d origin;
-            current_frame.set_motion(origin);
+        if (i_frame  == input_params.first_frame) {
             i_frame++;
 
             continue;
@@ -319,38 +468,28 @@ int main (int argc, char** argv) {
 
         RegularFrame &previous_frame = *tracker.previous;
 
-        ego.estimate_motion(current_frame, previous_frame);
-        cout << "EgomotionEstimation: i = " << i_frame << "\t correspondences: " << ego.selection.size() << "\t Inliers: " << ego.inliers.size() << endl;
+        delta = ego.estimate_motion(current_frame, previous_frame);
+
+        cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << ego.inliers.size() << "\ncorrespondences: " << ego.selection.size() << "\tRansac inliers: " << ego.ransac.inliers_.size() << endl;
+
         if (params.output_images) {
-            Mat res_l, res_r;
-            cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
-            cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
+//            Mat res = somedrawing_A(img_l, img_r, ego, current_frame, previous_frame);
+//            imwrite(params.output_dir+ string(image_name), res);
 
-            vector<Scalar> colors(current_frame.additionals.size(), Scalar(0, 0, 128));
-            for (auto idx : ego.inliers)
-                colors[idx] = Scalar(0, 128, 0);
+            Mat disp = somedrawing_B1disp(img_l, img_r, ego, current_frame, previous_frame);
+            imwrite(params.output_dir+ "/residual" + string(image_name), disp);
 
-            for (auto p : ego.selection)
-                colors[p.index] = colors[p.index] * 2;
+            ego.determine_inliers_reprojection_error();
+            Mat reproj = somedrawing_B0reproj(img_l, img_r, ego, current_frame, previous_frame);
+            imwrite(params.output_dir+ "/reproj" + string(image_name), reproj);
 
-            for (auto p : current_frame.additionals) {
-                Vector2d l = current_frame.image_points_left[p.index];
-                Vector2d r = current_frame.image_points_right[p.index];
-                circle(res_l, Point(l[0], l[1]), 3, colors[p.index], 2);
-                circle(res_r, Point(r[0], r[1]), 3, colors[p.index], 2);
-            }
-
-            vconcat(res_l, res_r, res_l);
-
-            imwrite(params.output_dir + string(image_name), res_l);
+            ego.determine_inliers();
+            Mat angle = somedrawing_B2angle(img_l, img_r, ego, current_frame, previous_frame);
+            imwrite(params.output_dir+ "/angle" + string(image_name), angle);
         }
 
-        delta = current_frame.motion * previous_frame.motion.inverse();
-
-        poses.push_back(delta);
-
         i_frame++;
-    } while(img_l.data && i_frame != input_params.amount_frames);
+    } while(img_l.data && i_frame != input_params.amount_frames + input_params.first_frame);
 
     ofstream output;
     output.open("result_pose");

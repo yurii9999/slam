@@ -6,6 +6,8 @@
 
 #include "opengv/types.hpp"
 #include "opengv/sac/Ransac.hpp"
+#include "opengv/sac/Lmeds.hpp"
+
 #include "opengv/sac_problems/absolute_pose/AbsolutePoseSacProblem.hpp"
 #include "opengv/absolute_pose/NoncentralAbsoluteAdapter.hpp"
 #include "opengv/absolute_pose/CentralAbsoluteAdapter.hpp"
@@ -39,28 +41,31 @@ public:
         double ransac_threshold = 0.001;
         int ransac_max_iterations = 100;
 
-        double farthest_coeff = 40;
+        double far_coeff = 100;
+        double close_coeff = 40;
+        /* select only points with disparity < far_c * base && > close_c * base */
+//         "far_coeff" cause point is far enough to consider it
+
+        int bucketing_amount = 2;
+        int bucketing_widht = 50;
+        int bucketing_height = 50;
 
         double final_th = 1.0;
         configuration() {}
         configuration(
-                selection_policy sp,
                 inliers_determination_policy idp,
                 triangulation_policy tp,
                 bool using_nonlinear_optimization,
                 double ransac_threshold,
                 int ransac_max_iterations,
-                double final_th,
-                double farthers_coeff
+                double final_th
                 ) {
-            selection_policy_ = sp;
             inliers_determination_policy_ = idp;
             triangulation_policy_ = tp;
             this->using_nonlinear_optimization = using_nonlinear_optimization;
             this->ransac_threshold = ransac_threshold;
             this->ransac_max_iterations = ransac_max_iterations;
             this->final_th = final_th;
-            this->farthest_coeff = farthers_coeff;
         }
 
     };
@@ -72,6 +77,7 @@ public:
     opengv::rotations_t camRotations;
 
     /* opengv's ransac */
+//    opengv::sac::Lmeds<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
     opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
 
     /* camera's intrinsics */
@@ -91,6 +97,8 @@ public:
     vector<Vector3d> temp_map;
     void triangulate_current_frame();
 
+    void triangulate_current_frame_B_();
+
     EgomotionEstimation(double focal, double cu, double cv, double base) {
         this->focal = focal;
         this->cu = cu;
@@ -107,9 +115,11 @@ public:
 
     EgomotionEstimation(double focal, double cu, double cv, double base, configuration conf): EgomotionEstimation(focal, cu, cv, base) {
         this->conf = conf;
+        ransac.threshold_ = conf.ransac_threshold;
+        ransac.max_iterations_ = conf.ransac_max_iterations;
     }
 
-    void estimate_motion(RegularFrame &curr, RegularFrame &prev);
+    Sophus::SE3d estimate_motion(RegularFrame &curr, RegularFrame &prev);
 
 private:
     RegularFrame *current_frame_;
@@ -118,16 +128,14 @@ private:
 //    vector<double> disparities;
 
     Sophus::SE3d estimate_relative_motion_A_(); /* Non central */
-//    Sophus::SE3d estimate_relative_motion_B_();
-    void estimate_motion_B_();
+    Sophus::SE3d estimate_relative_motion_B_(); /* central */
 
-    void select_all_points();
-    void select_points_closer_than();
-    void select_points_farther_than();
+    void select_points();
+    void bucketing();
 
 
+    opengv::absolute_pose::CentralAbsoluteAdapter *build_adapter_central();
     opengv::absolute_pose::NoncentralAbsoluteAdapter *build_adapter();
-    void ransac_procedure();
 
 public:
     Sophus::SE3d delta; /* from previos frame to current frame */

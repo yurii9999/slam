@@ -2,6 +2,8 @@
 
 #include <math.h>
 
+#include <algorithm>
+
 #include "opengv/absolute_pose/CentralAbsoluteAdapter.hpp"
 #include "opengv/sac_problems/absolute_pose/AbsolutePoseSacProblem.hpp"
 #include "opengv/sac/Ransac.hpp"
@@ -23,6 +25,9 @@ void EgomotionEstimation::triangulate_current_frame() {
     temp_map.clear();
     temp_map.resize(current_frame_->additionals.size());
 
+    disparities.clear();
+    disparities.resize(current_frame_->additionals.size());
+
     opengv::bearingVectors_t b1(current_frame_->additionals.size());
     opengv::bearingVectors_t b2(current_frame_->additionals.size());
 
@@ -30,6 +35,9 @@ void EgomotionEstimation::triangulate_current_frame() {
         RegularFrame::point_reference prev = p.get_it_on_previous();
         b1[p.index] = prev.get_bearing_vector_left();
         b2[p.index] = prev.get_bearing_vector_right();
+
+        double disparity = abs(prev.get_image_point_left()[0] - prev.get_image_point_right()[0]);
+        disparities[p.index] = disparity;
     }
 
     opengv::relative_pose::CentralRelativeAdapter adapter_triangulation(b1, b2, camOffsets[1], camRotations[1]);
@@ -38,7 +46,7 @@ void EgomotionEstimation::triangulate_current_frame() {
         temp_map[i] = opengv::triangulation::triangulate(adapter_triangulation, i);
 }
 
-void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame) {
+Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame) {
     current_frame_ = &current_frame;
     previous_frame_ = &previous_frame;
 
@@ -50,17 +58,8 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
     triangulate_current_frame();
 
     /* point selection */
-    switch (conf.selection_policy_) {
-    case configuration::SELECT_ALL:
-        select_all_points();
-        break;
-    case configuration::SELECT_CLOSE:
-        select_points_closer_than();
-        break;
-    case configuration::SELECT_FAR:
-        select_points_farther_than();
-        break;
-    }
+    select_points();
+    bucketing();
 
     delta = estimate_relative_motion_A_();
 
@@ -74,7 +73,7 @@ void EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFr
         break;
     }
 
-    current_frame_->set_motion(previous_frame_->motion * delta);
+    return delta;
 }
 
 Sophus::SE3d EgomotionEstimation::estimate_relative_motion_A_() {
@@ -92,6 +91,7 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion_A_() {
     amount_inliers = ransac.inliers_.size();
 
     opengv::transformations_t ts = opengv::absolute_pose::upnp(*adapter, ransac.inliers_);
+
     opengv::transformation_t t = ts[0];
 
     if (conf.using_nonlinear_optimization) {
@@ -105,6 +105,56 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion_A_() {
     return SE3d(t.block<3,3>(0,0), t.col(3));
 }
 
+Sophus::SE3d EgomotionEstimation::estimate_relative_motion_B_() {
+    opengv::absolute_pose::CentralAbsoluteAdapter *adapter = build_adapter_central();
+
+    std::shared_ptr<
+        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
+        new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
+        *adapter,
+        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP));
+    ransac.sac_model_ = absposeproblem_ptr;
+
+    ransac.computeModel();
+
+    opengv::transformations_t ts = opengv::absolute_pose::upnp(*adapter, ransac.inliers_);
+
+    for (auto t : ts)
+        std::cout << t.col(3).norm() << std::endl;
+
+    opengv::transformation_t t = ts[0];
+
+    if (conf.using_nonlinear_optimization) {
+        adapter->setR(t.block<3,3>(0,0));
+        adapter->sett(t.col(3));
+        t = opengv::absolute_pose::optimize_nonlinear(*adapter, ransac.inliers_);
+    }
+
+    delete adapter;
+
+    return SE3d(t.block<3,3>(0,0), t.col(3));
+}
+
+
+opengv::absolute_pose::CentralAbsoluteAdapter *EgomotionEstimation::build_adapter_central() {
+    bearing_vectors.clear();
+    bearing_vectors.resize(selection.size());
+
+    points.clear();
+    points.resize(selection.size());
+
+    int i = 0;
+    for (auto v : selection) {
+        bearing_vectors[i] = v.get_bearing_vector_left();
+
+        points[i] = temp_map[v.index];
+        i++;
+    }
+
+    return new opengv::absolute_pose::CentralAbsoluteAdapter(
+                bearing_vectors,
+                points);
+}
 /* building opengv ' s adapter */
 opengv::absolute_pose::NoncentralAbsoluteAdapter *EgomotionEstimation::build_adapter()
 {
@@ -150,14 +200,16 @@ void EgomotionEstimation::determine_inliers() {
     inliers.clear();
     for (auto p : current_frame_->additionals) {
         Vector3d estimated_bv_left = delta.inverse() * temp_map[p.index];
-        estimated_bv_left.normalize(); /* vector that shold be close to corresponded bearing vector on the left camera */
+        estimated_bv_left.normalize(); /* vector that should be close to corresponded bearing vector on the left camera */
         Vector3d estimated_bv_right = delta.inverse() * temp_map[p.index] - camOffsets[1]; /* now camRotations[1] = I */
         estimated_bv_right.normalize();
 
-        double res_l = (current_frame_->bearingVectors_left[p.index].cross(estimated_bv_left)).norm(); /* = sin between bearing vector and estimatedbearing vector */
-        double res_r = (current_frame_->bearingVectors_right[p.index].cross(estimated_bv_right)).norm();
+        double res_l = 1 - (current_frame_->bearingVectors_left[p.index]).dot(estimated_bv_left); /* = 1 - cos */
+        double res_r = 1 - (current_frame_->bearingVectors_right[p.index]).dot(estimated_bv_right);
+
         residual_l[p.index] = res_l;
         residual_r[p.index] = res_r;
+
         if (abs(res_l) < conf.final_th && abs(res_r) < conf.final_th)
             inliers.push_back(p.index);
     }
@@ -194,31 +246,48 @@ void EgomotionEstimation::determine_inliers_reprojection_error() {
 
 }
 
-void EgomotionEstimation::select_all_points()
+void EgomotionEstimation::select_points()
 {
     selection.clear();
     selection.reserve(current_frame_->additionals.size());
 
     for (auto p : current_frame_->additionals)
-        selection.push_back(RegularFrame::point_reference(current_frame_, p.index));
+        if (disparities[p.index] < conf.far_coeff * base && disparities[p.index] > conf.close_coeff * base)
+            selection.push_back(RegularFrame::point_reference(current_frame_, p.index));
 }
 
-void EgomotionEstimation::select_points_closer_than() {
-    selection.clear();
-    selection.reserve(current_frame_->additionals.size());
+/* reduce features from selection */
+void EgomotionEstimation::bucketing() {
+    int img_width = 0;
+    int img_height = 0;
 
-    for (auto p : current_frame_->additionals) {
-        if (temp_map[p.index][2] < conf.farthest_coeff)
-            selection.push_back(RegularFrame::point_reference(current_frame_, p.index));
+    for (auto p : current_frame_->image_points_left) {
+        if (p[0] > img_width)
+            img_width = (int) p[0];
+
+        if (p[1] > img_height)
+            img_height = (int) p[1];
     }
-}
 
-void EgomotionEstimation::select_points_farther_than() {
-    selection.clear();
-    selection.reserve(current_frame_->additionals.size());
+    std::sort(selection.begin(), selection.end(), [] (RegularFrame::point_reference a, RegularFrame::point_reference b) { return a.getAdditional().age > b.getAdditional().age; });
 
-    for (auto p : current_frame_->additionals) {
-        if (temp_map[p.index][2] > conf.farthest_coeff)
-            selection.push_back(RegularFrame::point_reference(current_frame_, p.index));
+    int buckets_u = img_width / conf.bucketing_widht;
+    int buckets_v = img_height / conf.bucketing_height;
+    vector<vector<RegularFrame::point_reference>>buckets(buckets_u * buckets_v);
+
+    for (auto p : selection) {
+        int b_u = p.get_image_point_left()[0] / conf.bucketing_widht;
+        int b_v = p.get_image_point_left()[1] / conf.bucketing_height;
+
+        if (buckets[b_u + b_v * buckets_v].size() < conf.bucketing_amount)
+            buckets[b_u + b_v * buckets_v].push_back(p);
     }
+
+    selection.clear();
+    selection.reserve(buckets_u * buckets_v * conf.bucketing_amount);
+
+    for (auto bucket : buckets)
+        for (auto p : bucket)
+            selection.push_back(p);
+
 }
