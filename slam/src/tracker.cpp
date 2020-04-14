@@ -49,10 +49,11 @@ void Tracker::push_back(uint8_t *I1,uint8_t* I2,int32_t* dims, SE3d *prediction)
 
     matcher->pushBack(I1, I2, dims, false);
     if (prediction) {
-        /* needs to fill libviso Matrix; if use just prediction.matrix().data(), it is transposed, if prediction.matrix().transpose().data() it is transposed too */
-        Eigen::Matrix4d temp = prediction->matrix().transpose();
-        Matrix tr_delta(4, 4, temp.data());
+        SE3d m = prediction->inverse();
+        Eigen::Matrix4d temp = m.matrix();
+        temp.transposeInPlace();
 
+        Matrix tr_delta(4, 4, temp.data());
         matcher->matchFeatures(2, &tr_delta);
     }
     else

@@ -380,6 +380,18 @@ Mat somedrawing_B2angle(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, Regula
     return res_l;
 }
 
+void write_pose(ofstream &output, Sophus::SE3d m) {
+    double *a = m.matrix3x4().data();
+    /* data now is [r00, .. r22 t1 t2 t3], so need to do this: */
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++)
+            output << a[j * 3 + i] << " ";
+        output << a[9 + i] << " ";
+    }
+
+    output << endl;
+}
+
 
 /* something taken form libviso */
 /* --parameters="../../something" --input="../../sequence" */
@@ -444,6 +456,11 @@ int main (int argc, char** argv) {
     Sophus::SE3d delta;
 
     int i_frame = input_params.first_frame;
+
+    ofstream output;
+    SE3d current_pose;
+    output.open("result_pose");
+
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
         string left_img_file_name  = left_img_dir + image_name;
@@ -463,6 +480,8 @@ int main (int argc, char** argv) {
         if (i_frame  == input_params.first_frame) {
             i_frame++;
 
+            write_pose(output, current_pose);
+
             continue;
         }
 
@@ -470,41 +489,29 @@ int main (int argc, char** argv) {
 
         delta = ego.estimate_motion(current_frame, previous_frame);
 
+        current_pose = current_pose * delta;
+        write_pose(output, current_pose);
+
         cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << ego.inliers.size() << "\ncorrespondences: " << ego.selection.size() << "\tRansac inliers: " << ego.ransac.inliers_.size() << endl;
 
         if (params.output_images) {
-//            Mat res = somedrawing_A(img_l, img_r, ego, current_frame, previous_frame);
-//            imwrite(params.output_dir+ string(image_name), res);
+            Mat res = somedrawing_A(img_l, img_r, ego, current_frame, previous_frame);
+            imwrite(params.output_dir+ string(image_name), res);
 
-            Mat disp = somedrawing_B1disp(img_l, img_r, ego, current_frame, previous_frame);
-            imwrite(params.output_dir+ "/residual" + string(image_name), disp);
+//            Mat disp = somedrawing_B1disp(img_l, img_r, ego, current_frame, previous_frame);
+//            imwrite(params.output_dir+ "/disp" + string(image_name), disp);
 
-            ego.determine_inliers_reprojection_error();
-            Mat reproj = somedrawing_B0reproj(img_l, img_r, ego, current_frame, previous_frame);
-            imwrite(params.output_dir+ "/reproj" + string(image_name), reproj);
+//            ego.determine_inliers_reprojection_error();
+//            Mat reproj = somedrawing_B0reproj(img_l, img_r, ego, current_frame, previous_frame);
+//            imwrite(params.output_dir+ "/reproj" + string(image_name), reproj);
 
-            ego.determine_inliers();
-            Mat angle = somedrawing_B2angle(img_l, img_r, ego, current_frame, previous_frame);
-            imwrite(params.output_dir+ "/angle" + string(image_name), angle);
+//            ego.determine_inliers();
+//            Mat angle = somedrawing_B2angle(img_l, img_r, ego, current_frame, previous_frame);
+//            imwrite(params.output_dir+ "/angle" + string(image_name), angle);
         }
 
         i_frame++;
     } while(img_l.data && i_frame != input_params.amount_frames + input_params.first_frame);
-
-    ofstream output;
-    output.open("result_pose");
-    for (int i = 0; i < frames.size(); i++) {
-        double *a = frames[i]->motion.matrix3x4().data();
-        /* data now is [r00, .. r22 t1 t2 t3], so need to do this: */
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++)
-                output << a[i * 3 + j] << " ";
-            output << a[9 + i] << " ";
-        }
-
-        output << endl;
-
-    }
 
     output.close();
 

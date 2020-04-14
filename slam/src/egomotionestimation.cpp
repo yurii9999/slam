@@ -33,17 +33,28 @@ void EgomotionEstimation::triangulate_current_frame() {
 
     for (auto p : current_frame_->additionals) {
         RegularFrame::point_reference prev = p.get_it_on_previous();
-        b1[p.index] = prev.get_bearing_vector_left();
-        b2[p.index] = prev.get_bearing_vector_right();
+//        b1[p.index] = prev.get_bearing_vector_left();
+//        b2[p.index] = prev.get_bearing_vector_right();
 
-        double disparity = abs(prev.get_image_point_left()[0] - prev.get_image_point_right()[0]);
+
+        Vector2d l = prev.get_image_point_left();
+        Vector2d r = prev.get_image_point_right();
+
+        double disparity = fmax(l[0] - r[0], 0.001);
+
         disparities[p.index] = disparity;
+        temp_map[p.index] = Vector3d(
+                    (l[0] - cu) * base / disparity,
+                    (l[1] - cv) * base / disparity,
+                    base * focal / disparity
+                );
     }
 
-    opengv::relative_pose::CentralRelativeAdapter adapter_triangulation(b1, b2, camOffsets[1], camRotations[1]);
+//    opengv::relative_pose::CentralRelativeAdapter adapter_triangulation(b1, b2, camOffsets[1], camRotations[1]);
 
-    for (int i = 0; i < current_frame_->additionals.size(); i++)
-        temp_map[i] = opengv::triangulation::triangulate(adapter_triangulation, i);
+//    for (auto p : current_frame_->additionals)
+//        temp_map[p.index] = opengv::triangulation::triangulate(adapter_triangulation, p.index);
+
 }
 
 Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame) {
@@ -61,7 +72,7 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, R
     select_points();
     bucketing();
 
-    delta = estimate_relative_motion_A_();
+    delta = estimate_relative_motion_B_();
 
     /* determine inliers */
     switch (conf.inliers_determination_policy_) {
@@ -118,9 +129,6 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion_B_() {
     ransac.computeModel();
 
     opengv::transformations_t ts = opengv::absolute_pose::upnp(*adapter, ransac.inliers_);
-
-    for (auto t : ts)
-        std::cout << t.col(3).norm() << std::endl;
 
     opengv::transformation_t t = ts[0];
 
@@ -210,7 +218,7 @@ void EgomotionEstimation::determine_inliers() {
         residual_l[p.index] = res_l;
         residual_r[p.index] = res_r;
 
-        if (abs(res_l) < conf.final_th && abs(res_r) < conf.final_th)
+        if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
             inliers.push_back(p.index);
     }
 }
@@ -239,7 +247,7 @@ void EgomotionEstimation::determine_inliers_reprojection_error() {
         double res_r = abs((current_frame_->image_points_right[p.index] - reprojection_right).norm());
         residual_l[p.index] = res_l;
         residual_r[p.index] = res_r;
-        if (abs(res_l) < conf.final_th && abs(res_r) < conf.final_th)
+        if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
             inliers.push_back(p.index);
     }
 
