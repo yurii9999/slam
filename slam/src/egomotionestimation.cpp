@@ -72,7 +72,7 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, R
     select_points();
     bucketing();
 
-    delta = estimate_relative_motion_B_();
+    delta = estimate_relative_motion();
 
     /* determine inliers */
     switch (conf.inliers_determination_policy_) {
@@ -87,114 +87,42 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, R
     return delta;
 }
 
-Sophus::SE3d EgomotionEstimation::estimate_relative_motion_A_() {
-    opengv::absolute_pose::NoncentralAbsoluteAdapter *adapter = build_adapter();
+Sophus::SE3d EgomotionEstimation::estimate_relative_motion() {
+    /* build opengv adapter */
+    opengv::bearingVectors_t bearing_vectors(selection.size());
+    opengv::points_t points(selection.size());
 
-    std::shared_ptr<
-        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
-        new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
-        *adapter,
-        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::GP3P));
-    ransac.sac_model_ = absposeproblem_ptr;
+    int i = 0;
+    for (auto p : selection) {
+        bearing_vectors[i] = p.get_bearing_vector_left();
 
-    ransac.computeModel();
-
-    amount_inliers = ransac.inliers_.size();
-
-    opengv::transformations_t ts = opengv::absolute_pose::upnp(*adapter, ransac.inliers_);
-
-    opengv::transformation_t t = ts[0];
-
-    if (conf.using_nonlinear_optimization) {
-        adapter->setR(t.block<3,3>(0,0));
-        adapter->sett(t.col(3));
-        t = opengv::absolute_pose::optimize_nonlinear(*adapter, ransac.inliers_);
+        points[i] = temp_map[p.index];
+        i++;
     }
 
-    delete adapter;
+    opengv::absolute_pose::CentralAbsoluteAdapter adapter(bearing_vectors, points);
 
-    return SE3d(t.block<3,3>(0,0), t.col(3));
-}
-
-Sophus::SE3d EgomotionEstimation::estimate_relative_motion_B_() {
-    opengv::absolute_pose::CentralAbsoluteAdapter *adapter = build_adapter_central();
-
+    /* use opengv 's algorithms */
     std::shared_ptr<
         opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
         new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
-        *adapter,
+        adapter,
         opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP));
     ransac.sac_model_ = absposeproblem_ptr;
 
     ransac.computeModel();
 
-    opengv::transformations_t ts = opengv::absolute_pose::upnp(*adapter, ransac.inliers_);
+    opengv::transformations_t ts = opengv::absolute_pose::upnp(adapter, ransac.inliers_);
 
     opengv::transformation_t t = ts[0];
 
     if (conf.using_nonlinear_optimization) {
-        adapter->setR(t.block<3,3>(0,0));
-        adapter->sett(t.col(3));
-        t = opengv::absolute_pose::optimize_nonlinear(*adapter, ransac.inliers_);
+        adapter.setR(t.block<3,3>(0,0));
+        adapter.sett(t.col(3));
+        t = opengv::absolute_pose::optimize_nonlinear(adapter, ransac.inliers_);
     }
-
-    delete adapter;
 
     return SE3d(t.block<3,3>(0,0), t.col(3));
-}
-
-
-opengv::absolute_pose::CentralAbsoluteAdapter *EgomotionEstimation::build_adapter_central() {
-    bearing_vectors.clear();
-    bearing_vectors.resize(selection.size());
-
-    points.clear();
-    points.resize(selection.size());
-
-    int i = 0;
-    for (auto v : selection) {
-        bearing_vectors[i] = v.get_bearing_vector_left();
-
-        points[i] = temp_map[v.index];
-        i++;
-    }
-
-    return new opengv::absolute_pose::CentralAbsoluteAdapter(
-                bearing_vectors,
-                points);
-}
-/* building opengv ' s adapter */
-opengv::absolute_pose::NoncentralAbsoluteAdapter *EgomotionEstimation::build_adapter()
-{
-    bearing_vectors.clear();
-    bearing_vectors.resize(2 * selection.size());
-
-    points.clear();
-    points.resize(2 * selection.size());
-
-    int i = 0;
-    for (auto v : selection) {
-        bearing_vectors[i] = v.get_bearing_vector_left();
-        bearing_vectors[selection.size() + i] = v.get_bearing_vector_right();
-
-        points[i] = temp_map[v.index];
-        points[selection.size() + i] = temp_map[v.index];
-        i++;
-    }
-
-    camCorrespondence.clear();
-    camCorrespondence.resize(2 * selection.size());
-    for (int i = 0; i < selection.size(); i++) {
-        camCorrespondence[i] = 0;
-        camCorrespondence[selection.size() + i] = 1;
-    }
-
-    return new opengv::absolute_pose::NoncentralAbsoluteAdapter(
-                bearing_vectors,
-                camCorrespondence,
-                points,
-                camOffsets,
-                camRotations);
 }
 
 /* determine points that in both frames(L & R) fit in motion model */
@@ -206,10 +134,13 @@ void EgomotionEstimation::determine_inliers() {
     residual_r.resize(current_frame_->additionals.size());
 
     inliers.clear();
+
+    Sophus::SE3d deltaInverse = delta.inverse();
+
     for (auto p : current_frame_->additionals) {
-        Vector3d estimated_bv_left = delta.inverse() * temp_map[p.index];
+        Vector3d estimated_bv_left = deltaInverse * temp_map[p.index];
         estimated_bv_left.normalize(); /* vector that should be close to corresponded bearing vector on the left camera */
-        Vector3d estimated_bv_right = delta.inverse() * temp_map[p.index] - camOffsets[1]; /* now camRotations[1] = I */
+        Vector3d estimated_bv_right = deltaInverse * temp_map[p.index] - Vector3d(base, 0, 0);
         estimated_bv_right.normalize();
 
         double res_l = 1 - (current_frame_->bearingVectors_left[p.index]).dot(estimated_bv_left); /* = 1 - cos */
@@ -232,13 +163,14 @@ void EgomotionEstimation::determine_inliers_reprojection_error() {
 
     inliers.clear();
 
+    SE3d deltaInverse = delta.inverse();
     for (auto p : current_frame_->additionals) {
-        Vector3d estimated_bv_left = delta.inverse() * temp_map[p.index];
+        Vector3d estimated_bv_left = deltaInverse * temp_map[p.index];
         Vector2d reprojection_left(
                     (estimated_bv_left[0] / estimated_bv_left[2] ) * focal + cu,
                     (estimated_bv_left[1] / estimated_bv_left[2] ) * focal + cv);
 
-        Vector3d estimated_bv_right = delta.inverse() * temp_map[p.index] - camOffsets[1]; /* now camRotations[1] = I */
+        Vector3d estimated_bv_right = deltaInverse * temp_map[p.index] - Vector3d(base, 0, 0);
         Vector2d reprojection_right(
                     (estimated_bv_right[0] / estimated_bv_right[2] ) * focal + cu,
                     (estimated_bv_right[1] / estimated_bv_right[2] ) * focal + cv);

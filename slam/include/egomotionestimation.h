@@ -72,10 +72,6 @@ public:
 
     vector<shared_ptr<RegularFrame::PointCommon>> scene; /* it will be external reference in the future */
 
-    /* camera offset in opengv terms */
-    opengv::translations_t camOffsets;
-    opengv::rotations_t camRotations;
-
     /* opengv's ransac */
 //    opengv::sac::Lmeds<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
     opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
@@ -91,13 +87,10 @@ public:
 
     /* additional output */
     vector<RegularFrame::point_reference> selection;
-    int amount_inliers;
 
     vector<double>disparities; /* disparities with which was points triangulated */ /* not used now cause it could be gotten from temp_map[i] Z'th coordinate */
     vector<Vector3d> temp_map;
     void triangulate_current_frame();
-
-    void triangulate_current_frame_B_();
 
     EgomotionEstimation(double focal, double cu, double cv, double base) {
         this->focal = focal;
@@ -107,10 +100,6 @@ public:
 
         ransac.threshold_ = (1.0 - cos(atan(sqrt(2.0)*0.5/focal)));
         ransac.max_iterations_ = 100;
-
-        camOffsets.resize(2); camRotations.resize(2);
-        camOffsets[0] = opengv::translation_t(0, 0, 0); camOffsets[1] = opengv::translation_t(base, 0, 0);
-        camRotations[0] = Eigen::Matrix3d::Identity(); camRotations[1] = Eigen::Matrix3d::Identity();
     }
 
     EgomotionEstimation(double focal, double cu, double cv, double base, configuration conf): EgomotionEstimation(focal, cu, cv, base) {
@@ -127,15 +116,10 @@ private:
 
 //    vector<double> disparities;
 
-    Sophus::SE3d estimate_relative_motion_A_(); /* Non central */
-    Sophus::SE3d estimate_relative_motion_B_(); /* central */
+    Sophus::SE3d estimate_relative_motion(); /* central */
 
     void select_points();
     void bucketing();
-
-
-    opengv::absolute_pose::CentralAbsoluteAdapter *build_adapter_central();
-    opengv::absolute_pose::NoncentralAbsoluteAdapter *build_adapter();
 
 public:
     Sophus::SE3d delta; /* from previos frame to current frame */
@@ -145,11 +129,4 @@ public:
     vector<int> inliers;
     void determine_inliers(); /* Check all obervation in current_frame_ is it inlier by comparison angels between rays */
     void determine_inliers_reprojection_error(); /* by compute reprojection error */
-
-
-    /* opengv adapter*/
-    opengv::bearingVectors_t bearing_vectors;
-    opengv::bearingVectors_t bearing_vectors_2;
-    opengv::points_t points;
-    vector<int> camCorrespondence;
 };
