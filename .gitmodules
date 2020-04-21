@@ -5,7 +5,3 @@
 [submodule "OpenGV"]
 	path = external/opengv
 	url = https://github.com/laurentkneip/opengv/
-
-[submodule "cxxopts"]
-	path = external/cxxopts
-	url = https://github.com/jarro2783/cxxopts
