@@ -2,8 +2,7 @@
 // Created by yurii on 30/11/2019.
 //
 
-#ifndef TRACKING_SCENEPOINT_H
-#define TRACKING_SCENEPOINT_H
+#pragma once
 
 #include "Projection.h"
 #include <vector>
@@ -21,6 +20,3 @@ public:
     vector<Projection*> projections;
     // are these projection from key-frames only???? or from each frame that we processed in odometry thread??????
 };
-
-
-#endif //TRACKING_SCENEPOINT_H

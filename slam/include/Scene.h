@@ -1,9 +1,7 @@
 //
 // Created by yurii on 30/11/2019.
 //
-
-#ifndef TRACKING_SCENE_H
-#define TRACKING_SCENE_H
+#pragma once
 
 #include "Camera.h"
 #include "ScenePoint.h"
@@ -14,6 +12,3 @@ private:
     vector<ScenePoint*> points;
     vector<Camera*> cameras; /* only keyframe cameras are included */
 };
-
-
-#endif //TRACKING_SCENE_H

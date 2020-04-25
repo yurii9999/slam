@@ -2,8 +2,7 @@
 // Created by yurii on 30/11/2019.
 //
 
-#ifndef TRACKING_CAMERA_H
-#define TRACKING_CAMERA_H
+#pragma once
 
 #include <opencv2/core.hpp>
 #include "Projection.h"
@@ -28,6 +27,3 @@ public:
     /* move implemenation from Tracker, and actually "sticking" and "drawing" are not camera's responsobility, so dont do anything*/
     static Mat stick(Mat img1, Mat img2);
 };
-
-
-#endif //TRACKING_CAMERA_H

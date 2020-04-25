@@ -110,16 +110,16 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion() {
         opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP));
     ransac.sac_model_ = absposeproblem_ptr;
 
-    ransac.computeModel();
+//    ransac.computeModel();
 
-    opengv::transformations_t ts = opengv::absolute_pose::upnp(adapter, ransac.inliers_);
+    opengv::transformations_t ts = opengv::absolute_pose::upnp(adapter/*, ransac.inliers_*/);
 
     opengv::transformation_t t = ts[0];
 
     if (conf.using_nonlinear_optimization) {
         adapter.setR(t.block<3,3>(0,0));
         adapter.sett(t.col(3));
-        t = opengv::absolute_pose::optimize_nonlinear(adapter, ransac.inliers_);
+//        t = opengv::absolute_pose::optimize_nonlinear(adapter/*, ransac.inliers_*/);
     }
 
     return SE3d(t.block<3,3>(0,0), t.col(3));

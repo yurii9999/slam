@@ -6,7 +6,6 @@
 #include <memory>
 
 #include "opengv/types.hpp"
-
 #include "sophus/se3.hpp"
 
 using std::vector;

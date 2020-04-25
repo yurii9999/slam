@@ -1,7 +1,0 @@
-[submodule "Sophus"]
-	path = external/Sophus
-	url = https://github.com/strasdat/Sophus/
-
-[submodule "OpenGV"]
-	path = external/opengv
-	url = https://github.com/laurentkneip/opengv/

@@ -2,8 +2,7 @@
 // Created by yurii on 30/11/2019.
 //
 
-#ifndef TRACKING_PROJECTION_H
-#define TRACKING_PROJECTION_H
+#pragma once
 
 #include "Camera.h"
 #include "ScenePoint.h"
@@ -20,6 +19,3 @@ public:
     ScenePoint *point;
     Camera *camera;
 };
-
-
-#endif //TRACKING_PROJECTION_H

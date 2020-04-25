@@ -13,6 +13,7 @@
 #include "opengv/absolute_pose/CentralAbsoluteAdapter.hpp"
 
 #include "opengv/relative_pose/CentralRelativeAdapter.hpp"
+#include "sophus/se3.hpp"
 
 using std::vector;
 using std::shared_ptr;
