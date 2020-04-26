@@ -1,7 +1,7 @@
 #include "additional/sequence_parameters.h"
 #include <cxxopts.hpp>
 
-#include "matcher.h"
+#include "viso2/matcher.h"
 #include "tracker.h"
 #include "segmentation.h"
 
@@ -17,14 +17,32 @@ void draw(Mat &img, Vector2d feature, Scalar color) {
     circle(img, a, 3, color, 2);
 }
 
+void draw_graph(Mat &img, Segmentation segmentation, double th, RegularFrame &current_frame) {
+    for (auto e : segmentation.graph) {
+        Point a(current_frame.image_points_left[e.a_index][0], current_frame.image_points_left[e.a_index][1]);
+        Point b(current_frame.image_points_left[e.b_index][0], current_frame.image_points_left[e.b_index][1]);
+
+        // BGR
+        Scalar color(0, 0, 255);
+        if (e.difference < th)
+            color = Scalar(0, 255, 0);
+
+        line(img, a, b, color, 2);
+    }
+
+}
+
 int main (int argc, char** argv) {
     cxxopts::Options options("Something", "try to use on kitti dataset");
     options.add_options()
+            ("seg_th", "Segmentation fixed treshold", cxxopts::value<double>())
             ("input", "Input parameters such as calibration, path to sequence", cxxopts::value<string>());
     auto result = options.parse(argc, argv);
 
     sequence_parameters input_params(result["input"].as<string>());
     input_params.print();
+
+    double seg_th = result["seg_th"].as<double>();
 
     double f  = input_params.focal;
     double cu = input_params.cu;
@@ -67,36 +85,17 @@ int main (int argc, char** argv) {
 
         segmentation.exec(current_frame);
 
-        double max_norm = segmentation.derivatives[0].norm();
-        double min_norm = segmentation.derivatives[0].norm();
-
-        for (auto p : segmentation.derivatives) {
-            double cur_norm = p.norm();
-            if (cur_norm > max_norm)
-                max_norm = cur_norm;
-
-            if (cur_norm < min_norm)
-                min_norm = cur_norm;
-        }
-
-
         // Draw points according to the derivatives:
         // smoth gradient from green(no motion) to red(big motion)
 
-        Scalar green(0, 255, 0);
         Scalar red(0, 0, 255);
-        vector<Scalar> colors(segmentation.derivatives.size());
-        for (int i = 0; i < segmentation.derivatives.size(); i++) {
-            double cf = (max_norm - segmentation.derivatives[i].norm()) / max_norm;
-            colors[i] = cf * green + (1 - cf) * red;
-        }
 
         Mat res;
         cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
 
-        for (int i = 0; i < segmentation.derivatives.size(); i++) {
-            draw(res, current_frame.image_points_left[i], colors[i]);
-        }
+
+        draw_graph(res, segmentation, seg_th, current_frame);
+
         imwrite("destt"+ string(image_name), res);
 
 
