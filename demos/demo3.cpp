@@ -17,18 +17,55 @@ void draw(Mat &img, Vector2d feature, Scalar color) {
     circle(img, a, 3, color, 2);
 }
 
+Scalar generate_color(int num) {
+    int r = (127 + num * 7 % 255);
+    int g = (63 + num * 11 % 255);
+    int b = (87 + num * 13 % 255);
+    return Scalar(b, g, r);
+}
+
 void draw_graph(Mat &img, Segmentation segmentation, double th, RegularFrame &current_frame) {
-    for (auto e : segmentation.graph) {
-        Point a(current_frame.image_points_left[e.a_index][0], current_frame.image_points_left[e.a_index][1]);
-        Point b(current_frame.image_points_left[e.b_index][0], current_frame.image_points_left[e.b_index][1]);
+    int num = 213312;
+    for (auto component : segmentation.graph.components) {
+        if (component.size() > 5) {
+            Scalar color = generate_color(num);
+            for (auto idx : component) {
+                Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
+//                circle(img, a, 3, color, 2);
 
-        // BGR
-        Scalar color(0, 0, 255);
-        if (e.difference < th)
-            color = Scalar(0, 255, 0);
+                for (auto idx2 : component) {
+                    Point b(current_frame.image_points_left[idx2][0], current_frame.image_points_left[idx2][1]);
+                    line(img, a, b, color, 1);
+                }
+            }
 
-        line(img, a, b, color, 2);
+            num += 157;
+        }
+        cout << component.size() << endl;
     }
+    num = 213312;
+    for (auto component : segmentation.graph.components) {
+        if (component.size() > 5) {
+            Scalar color = generate_color(num);
+            for (auto idx : component) {
+                Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
+                circle(img, a, 3, color, 2);
+            }
+
+            num += 157;
+        }
+    }
+//    for (auto e : segmentation.graph) {
+//        Point a(current_frame.image_points_left[e.a_index][0], current_frame.image_points_left[e.a_index][1]);
+//        Point b(current_frame.image_points_left[e.b_index][0], current_frame.image_points_left[e.b_index][1]);
+
+//        // BGR
+//        Scalar color(0, 0, 255);
+//        if (e.difference < th)
+//            color = Scalar(0, 255, 0);
+
+//        line(img, a, b, color, 2);
+//    }
 
 }
 
@@ -59,7 +96,7 @@ int main (int argc, char** argv) {
 
     Tracker tracker(f, cu, cv, params_matcher); /* tracker does not need f, cu cv; only matcher need */
 
-    Segmentation segmentation(f, cu, cv, base);
+    Segmentation segmentation(f, cu, cv, base, seg_th);
 
     vector<shared_ptr<RegularFrame>> frames;
 

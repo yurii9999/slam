@@ -13,12 +13,13 @@ using std::vector;
 using namespace std;
 
 
-Segmentation::Segmentation(double focal, double cu, double cv, double base)
+Segmentation::Segmentation(double focal, double cu, double cv, double base, double threshold)
 {
     this->focal = focal;
     this->cu = cu;
     this->cv = cv;
     this->base = base;
+    this->threshold = threshold;
 }
 
 void Segmentation::exec(RegularFrame &current) {
@@ -27,17 +28,16 @@ void Segmentation::exec(RegularFrame &current) {
     // estimate via finite differences
     estimate_derivatives();
 
-    // estimate additional derivatives to build Jacobian of velocity
-    estimate_additional_derivatives();
-
     // build jacobians from partial derivatives that were compute on previous step
     build_jacobians();
-    // TODO: fuse two previos steps
 
     // build graph:
     // delaunay triangulation & weighted each edge (weight = || a.derivative - b.derivative || )
     build_graph();
 
+
+    // get connected components
+    graph.get_components();
 }
 
 void Segmentation::estimate_derivatives() {
@@ -48,21 +48,6 @@ void Segmentation::estimate_derivatives() {
         derivatives[p.index] = estimate_derivative(p.index, &Segmentation::getX);
 }
 
-void Segmentation::estimate_additional_derivatives() {
-    derivatives_ul.clear();
-    derivatives_ur.clear();
-    derivatives_v.clear();
-
-    derivatives_ul.resize(current_frame->additionals.size());
-    derivatives_ur.resize(current_frame->additionals.size());
-    derivatives_v.resize(current_frame->additionals.size());
-
-    for (auto p : current_frame->additionals) {
-        derivatives_ul[p.index] = estimate_derivative(p.index, &Segmentation::getdXduL);
-        derivatives_ur[p.index] = estimate_derivative(p.index, &Segmentation::getdXduR);
-        derivatives_v[p.index] = estimate_derivative(p.index, &Segmentation::getdXdv);
-    }
-}
 
 void Segmentation::build_jacobians() {
     Jacobians.clear();
@@ -70,9 +55,9 @@ void Segmentation::build_jacobians() {
 
     for (auto p : current_frame->additionals) {
         Matrix3d a;
-        a.col(0) = derivatives_ul[p.index];
-        a.col(1) = derivatives_ur[p.index];
-        a.col(2) = derivatives_v[p.index];
+        a.col(0) = estimate_derivative(p.index, &Segmentation::getdXduL);
+        a.col(1) = estimate_derivative(p.index, &Segmentation::getdXduR);
+        a.col(2) = estimate_derivative(p.index, &Segmentation::getdXdv);
 
         Jacobians[p.index] = a;
     }
@@ -91,41 +76,45 @@ void Segmentation::build_graph() {
     triangulation.triangulate(points);
 
 
-    vector<dt::Edge<double>> edges = triangulation.getEdges();
+    vector<dt::Edge<double>> edges_dt = triangulation.getEdges();
 
-    graph.clear();
-    graph.reserve(current_frame->additionals.size());
-    for (auto e : edges) {
+    vector<edge> edges;
+    edges.clear();
+    edges.reserve(current_frame->additionals.size());
+    for (auto e : edges_dt) {
         int idx_a = e.v->p_index;
         int idx_b = e.w->p_index;
 
-//        double difference = (derivatives[idx_a] - derivatives[idx_b]).norm();
 
         Matrix3d J_ij = Jacobians[idx_a] - Jacobians[idx_b];
         Vector3d delta = derivatives[idx_a] - derivatives[idx_b];
-        Matrix3d covariace = J_ij * J_ij.transpose();
-        double difference = delta.transpose() * covariace * delta;
-        graph.push_back(edge(idx_a, idx_b, difference));
+        Matrix3d covariace_inv = J_ij * J_ij.transpose(); // hmmm
+//        double difference = sqrt(delta.transpose() * covariace_inv * delta); // hmmm transpose \ netranspose
+        double difference = (derivatives[idx_a] - derivatives[idx_b]).norm();
+
+        if (difference < threshold)
+            edges.push_back(edge(idx_a, idx_b, difference));
+
+        graph.update(edges, current_frame->additionals.size());
+
+
 
 //        cout << "====================================" << endl;
 //        cout << "New edge: " << endl;
 //        cout << "Idx A: " << idx_a << "\tIdx B: " << idx_b << endl;
-//        cout << "Image point A: " << current_frame->image_points_left[idx_a].transpose() << endl;
-//        cout << "Image point B: " << current_frame->image_points_left[idx_b].transpose() << endl;
-////        Vector3d A = getX(current_frame->image_points_left[idx_a], current_frame->image_points_right[idx_a]);
-////        Vector3d B = getX(current_frame->image_points_left[idx_b], current_frame->image_points_right[idx_b]);
+//        cout << "Image point A: " << current_frame->image_points_left[idx_a].transpose() << "\t" << current_frame->image_points_right[idx_a].transpose() << endl;
+//        cout << "Image point B: " << current_frame->image_points_left[idx_b].transpose() << "\t" << current_frame->image_points_right[idx_b].transpose() << endl;
+//        Vector3d A = getX(current_frame->image_points_left[idx_a], current_frame->image_points_right[idx_a]);
+//        Vector3d B = getX(current_frame->image_points_left[idx_b], current_frame->image_points_right[idx_b]);
 //        cout << "VelA: " << derivatives[idx_a].transpose() << endl;
 //        cout << "VelB: " << derivatives[idx_b].transpose() << endl;
 
 //        cout << "JacobianA: \n" << Jacobians[idx_a] << endl;
 //        cout << "JacobianB: \n" << Jacobians[idx_b] << endl;
-
-
-        cout << "Covariance: \n" << covariace << endl;
-
+//        cout << "Covariance: \n" << covariace << endl;
 //        cout << "Covariance inversed: \n" << covariace.inverse() << endl;
+//        cout << "Result: " << difference << endl;
 
-        cout << "Result: " << difference << endl;
 
 //        --input=../../sequence --seg_th=0.01
 
@@ -181,4 +170,45 @@ Eigen::Vector3d Segmentation::getdXdv(Eigen::Vector2d left, Eigen::Vector2d righ
             0,
             base / d,
             0);
+}
+
+void Segmentation::Graph::update(vector<Segmentation::edge> edges, int amount_vertexs) {
+    data.clear();
+    data.resize(amount_vertexs);
+
+    for (auto e : edges) {
+        data[e.a_index].push_back(e.b_index);
+        data[e.b_index].push_back(e.a_index);
+    }
+}
+
+void Segmentation::Graph::get_components() {
+    c_vertex.clear();
+    c_vertex.resize(data.size());
+
+    for (int i = 0; i < data.size(); i++)
+        c_vertex[i] = i;
+
+    remains_vertex = data.size();
+    components.clear();
+
+    for (int i = 0; i < data.size(); i++) {
+        if (c_vertex[i] != -1) {
+            c_component.clear();
+            dfs(i);
+            components.push_back(c_component);
+        }
+    }
+}
+
+void Segmentation::Graph::dfs(int idx) {
+    if (c_vertex[idx] == -1)
+        return;
+
+    c_vertex[idx] = -1;
+    --remains_vertex;
+    c_component.push_back(idx);
+
+    for (int next_v : data[idx])
+        dfs(next_v);
 }

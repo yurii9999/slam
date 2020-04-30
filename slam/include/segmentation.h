@@ -16,10 +16,35 @@ public:
         {}
     };
 
-    Segmentation(double focal, double cu, double cv, double base);
+    // I will try some graph representations
+    // Now it is vector of vertex with each corresponded vector of neighbors
+    class Graph {
+    public:
+        // Output of delaunay-triangulation is vector of edges that holds ids of A and B
+        // In this constructor Graph transforms edges to its representation
+        // Assumed, that edges with width more than threshold already removed
+        void update(vector<edge> edges, int amount_vertexs);
+
+        // returns connected components
+        void get_components();
+        vector<vector<int>> components;
+
+    private:
+        void dfs(int idx);
+
+        vector<vector<int>> data;
+
+        vector<int> c_vertex;
+        int remains_vertex;
+
+        vector<int> c_component;
+    };
+
+    Segmentation(double focal, double cu, double cv, double base, double threshold);
 
     void exec(RegularFrame &current);
 
+    double threshold;
     vector<Vector3d> derivatives;
 
     vector<Vector3d> derivatives_ul;
@@ -28,7 +53,8 @@ public:
 
     vector<Matrix3d> Jacobians;
 
-    vector<edge> graph;
+    Graph graph;
+    Graph a;
 
     RegularFrame *current_frame;
 

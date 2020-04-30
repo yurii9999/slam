@@ -110,7 +110,7 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion() {
         opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP));
     ransac.sac_model_ = absposeproblem_ptr;
 
-//    ransac.computeModel();
+    ransac.computeModel();
 
     opengv::transformations_t ts = opengv::absolute_pose::upnp(adapter/*, ransac.inliers_*/);
 
