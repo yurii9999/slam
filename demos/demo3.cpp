@@ -27,7 +27,7 @@ Scalar generate_color(int num) {
 void draw_graph(Mat &img, Segmentation segmentation, double th, RegularFrame &current_frame) {
     int num = 213312;
     for (auto component : segmentation.graph.components) {
-        if (component.size() > 5) {
+        if (component.size() > 1) {
             Scalar color = generate_color(num);
             for (auto idx : component) {
                 Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);

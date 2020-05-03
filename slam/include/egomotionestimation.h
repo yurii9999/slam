@@ -109,9 +109,12 @@ public:
         ransac.max_iterations_ = conf.ransac_max_iterations;
     }
 
+    Sophus::SE3d estimate_motion(RegularFrame &curr, RegularFrame &prev, vector<int> indeces);
+
     Sophus::SE3d estimate_motion(RegularFrame &curr, RegularFrame &prev);
 
 private:
+    vector<int> active_indeces;
     RegularFrame *current_frame_;
     RegularFrame *previous_frame_;
 

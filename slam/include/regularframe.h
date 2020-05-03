@@ -92,7 +92,8 @@ public:
 
         shared_ptr<PointCommon> common; /* common information about feature for each point */
 
-        RegularFrame::point_reference &get_it_on_previous() { return common->buffer[common->buffer.size() - 2]; }
+        RegularFrame::point_reference &get_it_on_previous() { return get_it_on(1); }
+        RegularFrame::point_reference &get_it_on(int i) { return *(common->buffer.end() - 1 -i); }
     };
 
     // TODO: create const Match::getFeatures (); in libviso to get snapshot of current frame

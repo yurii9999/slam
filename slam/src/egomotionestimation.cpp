@@ -57,7 +57,16 @@ void EgomotionEstimation::triangulate_current_frame() {
 
 }
 
-Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame) {
+Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &curr, RegularFrame &prev) {
+    vector<int> indeces(curr.additionals.size());
+    for (int i = 0; i < indeces.size(); i++)
+        indeces[i] = i;
+
+    estimate_motion(curr, prev, indeces);
+}
+
+Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame, vector<int> indeces) {
+    active_indeces = indeces;
     current_frame_ = &current_frame;
     previous_frame_ = &previous_frame;
 
@@ -189,11 +198,11 @@ void EgomotionEstimation::determine_inliers_reprojection_error() {
 void EgomotionEstimation::select_points()
 {
     selection.clear();
-    selection.reserve(current_frame_->additionals.size());
+    selection.reserve(active_indeces.size());
 
-    for (auto p : current_frame_->additionals)
-        if (disparities[p.index] < conf.far_coeff * base && disparities[p.index] > conf.close_coeff * base)
-            selection.push_back(RegularFrame::point_reference(current_frame_, p.index));
+    for (auto idx : active_indeces)
+        if (disparities[idx] < conf.far_coeff * base && disparities[idx] > conf.close_coeff * base)
+            selection.push_back(RegularFrame::point_reference(current_frame_, idx));
 }
 
 /* reduce features from selection */

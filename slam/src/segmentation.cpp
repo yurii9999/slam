@@ -126,14 +126,37 @@ void Segmentation::build_graph() {
 Eigen::Vector3d Segmentation::estimate_derivative(
         int data_idx,
         Eigen::Vector3d (Segmentation::*function)(Eigen::Vector2d, Eigen::Vector2d)) {
+    int order = min(current_frame->additionals[data_idx].age + 1, 6); // order of finite difference
+    vector<Vector3d> o(order); // observations
 
-        RegularFrame::point_reference prev_observation = current_frame->additionals[data_idx].get_it_on_previous();
+    o[0] = (this->*function) (current_frame->image_points_left[data_idx], current_frame->image_points_right[data_idx]);
 
-    Vector3d cur = (this->*function) (current_frame->image_points_left[data_idx], current_frame->image_points_right[data_idx]);
-    Vector3d prev = (this->*function) (prev_observation.get_image_point_left(), prev_observation.get_image_point_right());
+    for (int i = 1; i < order; i++) {
+        RegularFrame::point_reference prev_observation = current_frame->additionals[data_idx].get_it_on(i);
+        o[i] = (this->*function) (prev_observation.get_image_point_left(), prev_observation.get_image_point_right());
+    }
 
-    /* switch age : case 1: case 2 etc; now only for age = 1(2 times observed) */
-    return cur - prev;
+    Vector3d res;
+
+    switch (order) {
+    case 2:
+        res = o[0] - o[1];
+        break;
+    case 3:
+        res = 3./2 * o[0] - 2 * o[1] + 1./2 * o[2];
+        break;
+    case 4:
+        res = 11./6 * o[0] - 3 * o[1] + 3./2 * o[2] - 1./3 * o[3];
+        break;
+    case 5:
+        res = 25./12 * o[0] - 4 * o[1] + 3 * o[2] - 4./3 * o[3] + 1./4 * o[4];
+        break;
+    case 6:
+        res = 137./60 * o[0] - 5 * o[1] + 5 * o[2] - 10./3 * o[3] + 5./4 * o[4] - 1./5 * o[5];
+        break;
+    }
+
+    return res;
 }
 
 Eigen::Vector3d Segmentation::getX(Eigen::Vector2d left, Eigen::Vector2d right) {
@@ -172,6 +195,7 @@ Eigen::Vector3d Segmentation::getdXdv(Eigen::Vector2d left, Eigen::Vector2d righ
             0);
 }
 
+// Graph
 void Segmentation::Graph::update(vector<Segmentation::edge> edges, int amount_vertexs) {
     data.clear();
     data.resize(amount_vertexs);

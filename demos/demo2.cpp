@@ -276,8 +276,8 @@ int main (int argc, char** argv) {
 
         delta = ego.estimate_motion(current_frame, previous_frame);
 
-        current_pose = current_pose * delta;
-        write_pose(output, current_pose);
+//        current_pose = current_pose * delta;
+//        write_pose(output, current_pose);
 
         cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << ego.inliers.size() << "\ncorrespondences: " << ego.selection.size() << "\tRansac inliers: " << ego.ransac.inliers_.size() << endl;
 
