@@ -26,7 +26,6 @@ using std::shared_ptr;
 class EgomotionEstimation
 {
 public:
-public:
     struct configuration {
         enum selection_policy { SELECT_ALL, SELECT_CLOSE, SELECT_FAR};
         enum inliers_determination_policy { ANGEL_BETWEEN_RAYS, REPROJECTION_ERROR };
