@@ -8,7 +8,7 @@
 #include "sequence_parameters.h"
 #include "egomotion_parameters.h"
 
-struct Fabric {
+struct Factory {
     static Tracker get_with_params(sequence_parameters sp) {
         double f  = sp.focal;
         double cu = sp.cu;

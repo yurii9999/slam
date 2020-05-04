@@ -15,6 +15,8 @@
 #include "opengv/relative_pose/CentralRelativeAdapter.hpp"
 #include "sophus/se3.hpp"
 
+#include "loransac/loransac.h"
+
 using std::vector;
 using std::shared_ptr;
 
@@ -72,9 +74,8 @@ public:
 
     vector<shared_ptr<RegularFrame::PointCommon>> scene; /* it will be external reference in the future */
 
-    /* opengv's ransac */
-//    opengv::sac::Lmeds<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
-    opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
+//    opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
+    loransac ransac;
 
     /* camera's intrinsics */
     double focal;
@@ -98,14 +99,14 @@ public:
         this->cv = cv;
         this->base = base;
 
-        ransac.threshold_ = (1.0 - cos(atan(sqrt(2.0)*0.5/focal)));
-        ransac.max_iterations_ = 100;
+        ransac.th = (1.0 - cos(atan(sqrt(2.0)*0.5/focal)));
+        ransac.max_iterations = 100;
     }
 
     EgomotionEstimation(double focal, double cu, double cv, double base, configuration conf): EgomotionEstimation(focal, cu, cv, base) {
         this->conf = conf;
-        ransac.threshold_ = conf.ransac_threshold;
-        ransac.max_iterations_ = conf.ransac_max_iterations;
+        ransac.th = conf.ransac_threshold;
+        ransac.max_iterations = conf.ransac_max_iterations;
     }
 
     Sophus::SE3d estimate_motion(RegularFrame &curr, RegularFrame &prev, vector<int> indeces);

@@ -19,6 +19,8 @@
 
 #include <opengv/triangulation/methods.hpp>
 
+#include "loransac/sac_problem.h"
+
 using namespace std;
 
 void EgomotionEstimation::triangulate_current_frame() {
@@ -62,7 +64,7 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &curr, RegularFra
     for (int i = 0; i < indeces.size(); i++)
         indeces[i] = i;
 
-    estimate_motion(curr, prev, indeces);
+    return estimate_motion(curr, prev, indeces);
 }
 
 Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame, vector<int> indeces) {
@@ -111,24 +113,16 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion() {
 
     opengv::absolute_pose::CentralAbsoluteAdapter adapter(bearing_vectors, points);
 
-    /* use opengv 's algorithms */
-    std::shared_ptr<
-        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
-        new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
-        adapter,
-        opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP));
-    ransac.sac_model_ = absposeproblem_ptr;
-
+    std::shared_ptr<sac_problem> absposeproblem_ptr(new sac_problem(adapter));
+    ransac.problem = absposeproblem_ptr;
     ransac.computeModel();
 
-    opengv::transformations_t ts = opengv::absolute_pose::upnp(adapter/*, ransac.inliers_*/);
-
-    opengv::transformation_t t = ts[0];
+    opengv::transformation_t t = ransac.model_coefficients_;
 
     if (conf.using_nonlinear_optimization) {
         adapter.setR(t.block<3,3>(0,0));
         adapter.sett(t.col(3));
-//        t = opengv::absolute_pose::optimize_nonlinear(adapter/*, ransac.inliers_*/);
+        t = opengv::absolute_pose::optimize_nonlinear(adapter, ransac.inliers_);
     }
 
     return SE3d(t.block<3,3>(0,0), t.col(3));

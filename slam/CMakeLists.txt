@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(slam)
 
-FILE(GLOB SRC_FILES "src/*.cpp")
-FILE(GLOB INCLUDE_FILES "include/*.h")
+FILE(GLOB SRC_FILES "src/*.cpp" "src/*/*.cpp")
+FILE(GLOB INCLUDE_FILES "include/*.h" "include/*/*.h")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)

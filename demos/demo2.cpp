@@ -19,6 +19,7 @@
 
 #include "additional/sequence_parameters.h"
 #include "additional/egomotion_parameters.h"
+#include "additional/factory.h"
 
 using namespace std;
 using namespace cv;
@@ -199,38 +200,8 @@ int main (int argc, char** argv) {
     params.print();
     input_params.print();
 
-    double f  = input_params.focal;
-    double cu = input_params.cu;
-    double cv = input_params.cv;
-    double base = input_params.base;
-
-    Matcher::parameters params_matcher;
-    params_matcher.cu = cu;
-    params_matcher.cv = cv;
-    params_matcher.base = base;
-    params_matcher.f = f;
-    params_matcher.refinement = 1;
-    params_matcher.multi_stage = 0;
-
-    Tracker tracker(f, cu, cv, params_matcher); /* tracker does not need f, cu cv; only matcher need */
-
-    EgomotionEstimation::configuration c(
-                params.inliers_determination_policy_,
-                params.triangulation_policy_,
-                params.using_nonlinear_optimization,
-                params.ransac_threshold,
-                params.ransac_max_iterations,
-                params.final_threshold
-                );
-    c.bucketing_height = params.bucketing_size;
-    c.bucketing_widht = params.bucketing_size;
-    c.bucketing_amount = params.bucketing_amount;
-
-    c.close_coeff = params.close_coeff;
-    c.far_coeff = params.far_coeff;
-
-    EgomotionEstimation ego(f, cu, cv, base, c);
-
+    Tracker tracker = Factory::get_with_params(input_params);
+    EgomotionEstimation egomotion_estimation = Factory::get_with_params(params, input_params);
 
     vector<shared_ptr<RegularFrame>> frames;
 
@@ -263,7 +234,6 @@ int main (int argc, char** argv) {
 
         frames.push_back(tracker.current);
 
-        RegularFrame &current_frame = *tracker.current;
         if (i_frame  == input_params.first_frame) {
             i_frame++;
 
@@ -272,29 +242,19 @@ int main (int argc, char** argv) {
             continue;
         }
 
+        RegularFrame &current_frame = *tracker.current;
         RegularFrame &previous_frame = *tracker.previous;
 
-        delta = ego.estimate_motion(current_frame, previous_frame);
+        delta = egomotion_estimation.estimate_motion(current_frame, previous_frame);
 
-//        current_pose = current_pose * delta;
-//        write_pose(output, current_pose);
+        current_pose = current_pose * delta;
+        write_pose(output, current_pose);
 
-        cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << ego.inliers.size() << "\ncorrespondences: " << ego.selection.size() << "\tRansac inliers: " << ego.ransac.inliers_.size() << endl;
+        cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << egomotion_estimation.inliers.size() << "\ncorrespondences: " << egomotion_estimation.selection.size() << "\tRansac inliers: " << egomotion_estimation.ransac.inliers_.size() << endl;
 
         if (params.output_images) {
-            Mat res = somedrawing_A(img_l, img_r, ego, current_frame, previous_frame);
+            Mat res = somedrawing_A(img_l, img_r, egomotion_estimation, current_frame, previous_frame);
             imwrite(params.output_dir+ string(image_name), res);
-
-//            Mat disp = somedrawing_B1disp(img_l, img_r, ego, current_frame, previous_frame);
-//            imwrite(params.output_dir+ "/disp" + string(image_name), disp);
-
-//            ego.determine_inliers_reprojection_error();
-//            Mat reproj = somedrawing_B0reproj(img_l, img_r, ego, current_frame, previous_frame);
-//            imwrite(params.output_dir+ "/reproj" + string(image_name), reproj);
-
-//            ego.determine_inliers();
-//            Mat angle = somedrawing_B2angle(img_l, img_r, ego, current_frame, previous_frame);
-//            imwrite(params.output_dir+ "/angle" + string(image_name), angle);
         }
 
         i_frame++;
