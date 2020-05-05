@@ -23,7 +23,7 @@ public:
         // Output of delaunay-triangulation is vector of edges that holds ids of A and B
         // In this constructor Graph transforms edges to its representation
         // Assumed, that edges with width more than threshold already removed
-        void update(vector<edge> edges, int amount_vertexs);
+        void update(vector<edge> &edges, int amount_vertexs);
 
         // returns connected components
         void get_components();
@@ -45,6 +45,8 @@ public:
     void exec(RegularFrame &current);
 
     double threshold;
+    double second_th;
+
     vector<Vector3d> derivatives;
 
     vector<Vector3d> derivatives_ul;
@@ -53,10 +55,12 @@ public:
 
     vector<Matrix3d> Jacobians;
 
-    Graph graph;
-    Graph a;
-
     RegularFrame *current_frame;
+
+    Graph graph;
+
+    vector<vector<int>> components;
+
 
 private:
     Vector3d getX(Vector2d left, Vector2d right);
@@ -71,6 +75,9 @@ private:
     void build_jacobians();
 
     void build_graph();
+
+    /* fuse components to one point with average values through all elements of each component */
+    void second_refiment();
 
     Vector3d estimate_derivative(
             int data_idx,

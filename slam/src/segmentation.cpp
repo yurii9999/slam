@@ -37,9 +37,11 @@ void Segmentation::exec(RegularFrame &current) {
     // delaunay triangulation & weighted each edge (weight = || a.derivative - b.derivative || )
     build_graph();
 
-
-    // get connected components
+    // compute connected components
     graph.get_components();
+    components = graph.components;
+
+    second_refiment();
 }
 
 void Segmentation::estimate_derivatives() {
@@ -122,6 +124,90 @@ void Segmentation::build_graph() {
     graph.update(edges, current_frame->additionals.size());
 }
 
+void Segmentation::second_refiment() {
+    vector<Vector3d> velocities(graph.components.size());
+    vector<Vector2d> centers(graph.components.size());
+    vector<Matrix3d> Jacobians(graph.components.size());
+
+    /* fuse components to single point */
+    int number = 0;
+    for (auto component : graph.components) {
+        Vector3d c_velocity;
+        Vector2d c_center;
+        Matrix3d c_Jacobian;
+
+        for (int idx : component) {
+            c_center += current_frame->image_points_left[idx];
+            c_velocity += derivatives[idx];
+            c_Jacobian += this->Jacobians[idx];
+        }
+
+        c_velocity /= component.size();
+        c_center /= component.size();
+        c_Jacobian /= component.size();
+
+        velocities[number] = c_velocity;
+        centers[number] = c_center;
+        Jacobians[number] = c_Jacobian;
+        ++number;
+    }
+
+    /* build dt::Graph to apply delaunay-triangulation */
+    vector<dt::Vector2<double>> points;
+    for (int i = 0; i < centers.size(); i++) {
+        Vector2d &p = centers[i];
+        points.push_back(dt::Vector2<double>(p[0], p[1], i));
+    }
+    dt::Delaunay<double> triangulation;
+    triangulation.triangulate(points);
+
+    vector<dt::Edge<double>> edges_dt = triangulation.getEdges();
+
+    vector<edge> edges;
+    edges.clear();
+    edges.reserve(current_frame->additionals.size());
+
+    for (auto e : edges_dt) {
+        int idx_a = e.v->p_index;
+        int idx_b = e.w->p_index;
+
+        Matrix3d J_ij = Jacobians[idx_a] - Jacobians[idx_b];
+        Vector3d delta = velocities[idx_a] - velocities[idx_b];
+        Matrix3d covariace_inv = J_ij * J_ij.transpose();
+        double difference = sqrt(delta.transpose() * covariace_inv * delta);
+
+        if (difference < second_th)
+            edges.push_back(edge(idx_a, idx_b, difference));
+    }
+
+    graph.update(edges, centers.size());
+    graph.get_components();
+
+
+    /* update original components */
+    vector<vector<int>> new_components;
+
+    for (auto c : graph.components) {
+        int nc_size = 0;
+
+        for (auto e : c) {
+            nc_size += components[e].size();
+
+        }
+
+        vector<int> new_component(nc_size);
+        int cur_size = 0;
+        for (auto e : c) {
+            copy(components[e].begin(), components[e].end(), new_component.begin() + cur_size);
+            cur_size += components[e].size();
+        }
+
+        new_components.push_back(new_component);
+    }
+
+    this->components = new_components;
+}
+
 /* estimate derivateve of function with pair of image-point coordinates as argument of data that stores on current_frame under data_idx index */
 Eigen::Vector3d Segmentation::estimate_derivative(
         int data_idx,
@@ -196,7 +282,7 @@ Eigen::Vector3d Segmentation::getdXdv(Eigen::Vector2d left, Eigen::Vector2d righ
 }
 
 // Graph
-void Segmentation::Graph::update(vector<Segmentation::edge> edges, int amount_vertexs) {
+void Segmentation::Graph::update(vector<Segmentation::edge> &edges, int amount_vertexs) {
     data.clear();
     data.resize(amount_vertexs);
 

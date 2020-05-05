@@ -59,6 +59,7 @@ struct Factory {
         double base = seqp.base;
 
         Segmentation segmentation(seqp.focal, seqp.cu, seqp.cv, seqp.base, segp.threshold);
+        segmentation.second_th = segp.second_th;
 
         return segmentation;
     }

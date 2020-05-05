@@ -44,7 +44,7 @@ Scalar generate_color(int num) {
 
 void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame) {
     int num = 213312;
-    for (auto component : segmentation.graph.components) {
+    for (auto component : segmentation.components) {
         if (component.size() > 1) {
             Scalar color = generate_color(num);
             for (auto idx : component) {
@@ -61,7 +61,7 @@ void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame
         }
     }
     num = 213312;
-    for (auto component : segmentation.graph.components) {
+    for (auto component : segmentation.components) {
         if (component.size() > 5) {
             Scalar color = generate_color(num);
             for (auto idx : component) {
@@ -139,11 +139,11 @@ int main (int argc, char** argv) {
         segmentation.exec(current_frame);
         end1 = std::chrono::system_clock::now();
         int elapsed_seconds1 = std::chrono::duration_cast<std::chrono::milliseconds> (end1-start1).count();
-        cout << "Hm, (sec): " << elapsed_seconds1 << endl;
+        cout << "Hm, (msec): " << elapsed_seconds1 << endl;
 
         Mat res;
         cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
-//        draw_graph(res, segmentation, current_frame);
+        draw_graph(res, segmentation, current_frame);
 
         for (auto segment : segmentation.graph.components) {
             if (segment.size() == 1)
@@ -159,9 +159,9 @@ int main (int argc, char** argv) {
             average_residual /= segment.size();
             average_center /= segment.size();
 
-            if (average_residual > 0.00005) {
-                draw_component(res, segment, current_frame, Scalar(0, 255, 0));
-            }
+//            if (average_residual > 0.00005) {
+//                draw_component(res, segment, current_frame, Scalar(0, 255, 0));
+//            }
         }
 
         imwrite("destt"+ string(image_name), res);
