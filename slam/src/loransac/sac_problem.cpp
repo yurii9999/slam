@@ -66,11 +66,11 @@ bool sac_problem::optimize(vector<int> &sample, opengv::transformation_t &new_mo
 void sac_problem::get_samples_for_optimization(vector<int> &sample, vector<int> &inliers) {
     int sample_size = std::min(static_cast<int>(inliers.size() / 2), 14);
 
+
     if (sample_size < 4 && sample_size > 2)
         sample_size = inliers.size();
 
     sample.resize(sample_size);
-
 
     int index_size = inliers.size();
     for( unsigned int i = 0; i < sample_size; ++i )
@@ -91,5 +91,6 @@ void sac_problem::get_samples_for_optimization(vector<int> &sample, vector<int> 
 }
 
 void sac_problem::final_optimization(vector<int> &inliers, opengv::transformation_t &model) {
-    optimize(inliers, model);
+    // nonlinear optimization already implemented here
+    optimizeModelCoefficients(inliers, model, model);
 }

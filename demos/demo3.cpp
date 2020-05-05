@@ -13,6 +13,9 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 
+#include <chrono>
+#include <ctime>
+
 using namespace cv;
 using namespace std;
 
@@ -107,6 +110,10 @@ int main (int argc, char** argv) {
 
     int i_frame = sequence_params.first_frame;
     Mat img_l, img_r;
+
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    start = std::chrono::system_clock::now();
+
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
         string left_img_file_name  = sequence_params.sequence_path + "/image_0" + image_name;
@@ -127,11 +134,16 @@ int main (int argc, char** argv) {
         RegularFrame &previous_frame = *tracker.previous;
 
         /* Se3d delta = */ egomotion.estimate_motion(current_frame, previous_frame);
+        std::chrono::time_point<std::chrono::system_clock> start1, end1;
+        start1 = std::chrono::system_clock::now();
         segmentation.exec(current_frame);
+        end1 = std::chrono::system_clock::now();
+        int elapsed_seconds1 = std::chrono::duration_cast<std::chrono::milliseconds> (end1-start1).count();
+        cout << "Hm, (sec): " << elapsed_seconds1 << endl;
 
         Mat res;
         cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
-        draw_graph(res, segmentation, current_frame);
+//        draw_graph(res, segmentation, current_frame);
 
         for (auto segment : segmentation.graph.components) {
             if (segment.size() == 1)
@@ -147,8 +159,8 @@ int main (int argc, char** argv) {
             average_residual /= segment.size();
             average_center /= segment.size();
 
-            if (average_residual > 0.00000005) {
-//                draw_component(res, segment, current_frame, Scalar(0, 255, 0));
+            if (average_residual > 0.00005) {
+                draw_component(res, segment, current_frame, Scalar(0, 255, 0));
             }
         }
 
@@ -158,4 +170,14 @@ int main (int argc, char** argv) {
 
         i_frame++;
     } while(img_l.data && i_frame != sequence_params.amount_frames + sequence_params.first_frame);
+
+    end = std::chrono::system_clock::now();
+    int elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end-start).count();
+    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+
+    std::cout << "Время выполнения: " << elapsed_seconds << endl;
+    int av_sec = std::chrono::duration_cast<std::chrono::seconds> ((end-start) / sequence_params.amount_frames ).count();
+    std::cout << "Average per frame: " << av_sec << endl;
+    cout << "(sec)" << endl;
+
 }

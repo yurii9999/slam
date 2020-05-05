@@ -1,6 +1,7 @@
 #include "segmentation.h"
 
 #include <vector>
+#include <stack>
 #include <eigen3/Eigen/Core>
 
 #include "dt/delaunay.h"
@@ -9,6 +10,7 @@
 
 using Eigen::Vector3d;
 using std::vector;
+using std::stack;
 
 using namespace std;
 
@@ -89,13 +91,12 @@ void Segmentation::build_graph() {
         Matrix3d J_ij = Jacobians[idx_a] - Jacobians[idx_b];
         Vector3d delta = derivatives[idx_a] - derivatives[idx_b];
         Matrix3d covariace_inv = J_ij * J_ij.transpose(); // hmmm
-        double difference = sqrt(delta.transpose() * covariace_inv * delta); // hmmm transpose \ netranspose
+        double difference = sqrt(delta.transpose() * covariace_inv * delta); // hmmm transpose \ netranspose (its symmetric lol)
 //        double difference = (derivatives[idx_a] - derivatives[idx_b]).norm();
 
         if (difference < threshold)
             edges.push_back(edge(idx_a, idx_b, difference));
 
-        graph.update(edges, current_frame->additionals.size());
 
 
 
@@ -116,10 +117,9 @@ void Segmentation::build_graph() {
 //        cout << "Result: " << difference << endl;
 
 
-//        --input=../../sequence --seg_th=0.01
-
-
     }
+
+    graph.update(edges, current_frame->additionals.size());
 }
 
 /* estimate derivateve of function with pair of image-point coordinates as argument of data that stores on current_frame under data_idx index */
@@ -226,13 +226,23 @@ void Segmentation::Graph::get_components() {
 }
 
 void Segmentation::Graph::dfs(int idx) {
-    if (c_vertex[idx] == -1)
-        return;
+    stack<int> to_visit;
 
+    to_visit.push(idx);
     c_vertex[idx] = -1;
     --remains_vertex;
     c_component.push_back(idx);
 
-    for (int next_v : data[idx])
-        dfs(next_v);
+    while (!to_visit.empty()) {
+        int cur_vertex = to_visit.top();
+        to_visit.pop();
+
+        for (auto next_v : data[cur_vertex])
+            if (c_vertex[next_v] != -1) {
+                c_component.push_back(next_v);
+                to_visit.push(next_v);
+                c_vertex[next_v] = -1;
+                --remains_vertex;
+            }
+    }
 }

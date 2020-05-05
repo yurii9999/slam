@@ -1,11 +1,7 @@
 #include "loransac/loransac.h"
 
-#include <iostream>
-
-using namespace std;
-
 loransac::loransac() {
-    probability = 0.999;
+    probability = 0.99;
     th = 1.0;
     max_iterations = 1000;
 }
@@ -104,17 +100,11 @@ bool loransac::computeModel() {
         return (false);
     }
 
-    cout << "Iterations: ";
-    cout << iterations_ << endl;
-//    cout << "k = ";
-//    cout << k << endl;
-//    cout << "skipped: " << skipped_count << endl;
     // Get the set of inliers that correspond to the best model found so far
     problem->selectWithinDistance( model_coefficients_, th, inliers_ );
-    cout << "Before: " << inliers_.size() << endl;
+
     problem->final_optimization(inliers_, model_coefficients_);
     problem->selectWithinDistance( model_coefficients_, th, inliers_ );
-    cout << "After: " << inliers_.size() << endl;
 
     return (true);
 }

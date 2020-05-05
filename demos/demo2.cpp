@@ -218,6 +218,10 @@ int main (int argc, char** argv) {
     ofstream output;
     SE3d current_pose;
     output.open("result_pose");
+    int e_iter = 0;
+    int e_getin = 0;
+    int e_better = 0;
+    int e_amount = 0;
 
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
@@ -251,6 +255,9 @@ int main (int argc, char** argv) {
         write_pose(output, current_pose);
 
         cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << egomotion_estimation.inliers.size() << "\ncorrespondences: " << egomotion_estimation.selection.size() << "\tRansac inliers: " << egomotion_estimation.ransac.inliers_.size() << endl;
+        cout << "Iterations " << egomotion_estimation.ransac.iterations_ << endl;
+        e_iter += egomotion_estimation.ransac.iterations_;
+        ++e_amount;
 
         if (params.output_images) {
             Mat res = somedrawing_A(img_l, img_r, egomotion_estimation, current_frame, previous_frame);
@@ -261,6 +268,12 @@ int main (int argc, char** argv) {
     } while(img_l.data && i_frame != input_params.amount_frames + input_params.first_frame);
 
     output.close();
+
+    cout << endl << "Results: " << endl;
+    cout << "Average convergence (iterations) : " << ((double) e_iter) / e_amount << endl;
+    cout << "amount got in(times): " << e_getin << endl;
+    cout << "amount increasings(times) : " << e_better << endl;
+    cout << "Percentage : " << ((double) e_better )/ (e_getin) << endl;
 
     return 0;
 }

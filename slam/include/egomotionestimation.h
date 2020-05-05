@@ -74,7 +74,6 @@ public:
 
     vector<shared_ptr<RegularFrame::PointCommon>> scene; /* it will be external reference in the future */
 
-//    opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
     loransac ransac;
 
     /* camera's intrinsics */

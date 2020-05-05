@@ -114,16 +114,11 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion() {
     opengv::absolute_pose::CentralAbsoluteAdapter adapter(bearing_vectors, points);
 
     std::shared_ptr<sac_problem> absposeproblem_ptr(new sac_problem(adapter));
+
     ransac.problem = absposeproblem_ptr;
     ransac.computeModel();
 
     opengv::transformation_t t = ransac.model_coefficients_;
-
-    if (conf.using_nonlinear_optimization) {
-        adapter.setR(t.block<3,3>(0,0));
-        adapter.sett(t.col(3));
-        t = opengv::absolute_pose::optimize_nonlinear(adapter, ransac.inliers_);
-    }
 
     return SE3d(t.block<3,3>(0,0), t.col(3));
 }
