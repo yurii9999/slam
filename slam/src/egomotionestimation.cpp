@@ -189,6 +189,5 @@ void EgomotionEstimation::select_points()
     selection.reserve(active_indeces.size());
 
     for (auto idx : active_indeces)
-        if (disparities[idx] < conf.far_coeff * base && disparities[idx] > conf.close_coeff * base)
-            selection.push_back(RegularFrame::point_reference(current_frame_, idx));
+        selection.push_back(RegularFrame::point_reference(current_frame_, idx));
 }

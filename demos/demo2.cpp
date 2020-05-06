@@ -223,6 +223,8 @@ int main (int argc, char** argv) {
     int e_better = 0;
     int e_amount = 0;
 
+    B
+
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
         string left_img_file_name  = left_img_dir + image_name;
