@@ -44,7 +44,7 @@ Scalar generate_color(int num) {
 
 void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame) {
     int num = 213312;
-    for (auto component : segmentation.components) {
+    for (auto component : segmentation.graph.components) {
         if (component.size() > 1) {
             Scalar color = generate_color(num);
             for (auto idx : component) {
@@ -61,7 +61,7 @@ void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame
         }
     }
     num = 213312;
-    for (auto component : segmentation.components) {
+    for (auto component : segmentation.graph.components) {
         if (component.size() > 5) {
             Scalar color = generate_color(num);
             for (auto idx : component) {
@@ -159,9 +159,16 @@ int main (int argc, char** argv) {
             average_residual /= segment.size();
             average_center /= segment.size();
 
-//            if (average_residual > 0.00005) {
+            if (average_residual > 0.0005) {
 //                draw_component(res, segment, current_frame, Scalar(0, 255, 0));
-//            }
+            }
+        }
+
+        for (auto p : current_frame.additionals) {
+            Vector2d &ip = current_frame.image_points_left[p.index];
+            Point a(ip[0], ip[1]);
+
+            circle(res, a, 2, Scalar(255,0,0),2);
         }
 
         imwrite("destt"+ string(image_name), res);

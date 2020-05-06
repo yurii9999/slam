@@ -45,7 +45,6 @@ public:
     void exec(RegularFrame &current);
 
     double threshold;
-    double second_th;
 
     vector<Vector3d> derivatives;
 

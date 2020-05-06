@@ -64,7 +64,7 @@ bool sac_problem::optimize(vector<int> &sample, opengv::transformation_t &new_mo
 }
 
 void sac_problem::get_samples_for_optimization(vector<int> &sample, vector<int> &inliers) {
-    int sample_size = std::min(static_cast<int>(inliers.size() / 2), 14);
+    int sample_size = std::min(static_cast<int>(inliers.size() / 2), 40);
 
 
     if (sample_size < 4 && sample_size > 2)

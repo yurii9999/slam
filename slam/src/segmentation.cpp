@@ -40,8 +40,6 @@ void Segmentation::exec(RegularFrame &current) {
     // compute connected components
     graph.get_components();
     components = graph.components;
-
-    second_refiment();
 }
 
 void Segmentation::estimate_derivatives() {
@@ -93,120 +91,16 @@ void Segmentation::build_graph() {
         Matrix3d J_ij = Jacobians[idx_a] - Jacobians[idx_b];
         Vector3d delta = derivatives[idx_a] - derivatives[idx_b];
         Matrix3d covariace_inv = J_ij * J_ij.transpose(); // hmmm
-        double difference = sqrt(delta.transpose() * covariace_inv * delta); // hmmm transpose \ netranspose (its symmetric lol)
+        double difference = sqrt(delta.transpose() * covariace_inv * delta);
 //        double difference = (derivatives[idx_a] - derivatives[idx_b]).norm();
 
         if (difference < threshold)
             edges.push_back(edge(idx_a, idx_b, difference));
-
-
-
-
-//        cout << "====================================" << endl;
-//        cout << "New edge: " << endl;
-//        cout << "Idx A: " << idx_a << "\tIdx B: " << idx_b << endl;
-//        cout << "Image point A: " << current_frame->image_points_left[idx_a].transpose() << "\t" << current_frame->image_points_right[idx_a].transpose() << endl;
-//        cout << "Image point B: " << current_frame->image_points_left[idx_b].transpose() << "\t" << current_frame->image_points_right[idx_b].transpose() << endl;
-//        Vector3d A = getX(current_frame->image_points_left[idx_a], current_frame->image_points_right[idx_a]);
-//        Vector3d B = getX(current_frame->image_points_left[idx_b], current_frame->image_points_right[idx_b]);
-//        cout << "VelA: " << derivatives[idx_a].transpose() << endl;
-//        cout << "VelB: " << derivatives[idx_b].transpose() << endl;
-
-//        cout << "JacobianA: \n" << Jacobians[idx_a] << endl;
-//        cout << "JacobianB: \n" << Jacobians[idx_b] << endl;
-//        cout << "Covariance: \n" << covariace << endl;
-//        cout << "Covariance inversed: \n" << covariace.inverse() << endl;
-//        cout << "Result: " << difference << endl;
-
-
     }
 
     graph.update(edges, current_frame->additionals.size());
 }
 
-void Segmentation::second_refiment() {
-    vector<Vector3d> velocities(graph.components.size());
-    vector<Vector2d> centers(graph.components.size());
-    vector<Matrix3d> Jacobians(graph.components.size());
-
-    /* fuse components to single point */
-    int number = 0;
-    for (auto component : graph.components) {
-        Vector3d c_velocity;
-        Vector2d c_center;
-        Matrix3d c_Jacobian;
-
-        for (int idx : component) {
-            c_center += current_frame->image_points_left[idx];
-            c_velocity += derivatives[idx];
-            c_Jacobian += this->Jacobians[idx];
-        }
-
-        c_velocity /= component.size();
-        c_center /= component.size();
-        c_Jacobian /= component.size();
-
-        velocities[number] = c_velocity;
-        centers[number] = c_center;
-        Jacobians[number] = c_Jacobian;
-        ++number;
-    }
-
-    /* build dt::Graph to apply delaunay-triangulation */
-    vector<dt::Vector2<double>> points;
-    for (int i = 0; i < centers.size(); i++) {
-        Vector2d &p = centers[i];
-        points.push_back(dt::Vector2<double>(p[0], p[1], i));
-    }
-    dt::Delaunay<double> triangulation;
-    triangulation.triangulate(points);
-
-    vector<dt::Edge<double>> edges_dt = triangulation.getEdges();
-
-    vector<edge> edges;
-    edges.clear();
-    edges.reserve(current_frame->additionals.size());
-
-    for (auto e : edges_dt) {
-        int idx_a = e.v->p_index;
-        int idx_b = e.w->p_index;
-
-        Matrix3d J_ij = Jacobians[idx_a] - Jacobians[idx_b];
-        Vector3d delta = velocities[idx_a] - velocities[idx_b];
-        Matrix3d covariace_inv = J_ij * J_ij.transpose();
-        double difference = sqrt(delta.transpose() * covariace_inv * delta);
-
-        if (difference < second_th)
-            edges.push_back(edge(idx_a, idx_b, difference));
-    }
-
-    graph.update(edges, centers.size());
-    graph.get_components();
-
-
-    /* update original components */
-    vector<vector<int>> new_components;
-
-    for (auto c : graph.components) {
-        int nc_size = 0;
-
-        for (auto e : c) {
-            nc_size += components[e].size();
-
-        }
-
-        vector<int> new_component(nc_size);
-        int cur_size = 0;
-        for (auto e : c) {
-            copy(components[e].begin(), components[e].end(), new_component.begin() + cur_size);
-            cur_size += components[e].size();
-        }
-
-        new_components.push_back(new_component);
-    }
-
-    this->components = new_components;
-}
 
 /* estimate derivateve of function with pair of image-point coordinates as argument of data that stores on current_frame under data_idx index */
 Eigen::Vector3d Segmentation::estimate_derivative(

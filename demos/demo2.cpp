@@ -271,9 +271,6 @@ int main (int argc, char** argv) {
 
     cout << endl << "Results: " << endl;
     cout << "Average convergence (iterations) : " << ((double) e_iter) / e_amount << endl;
-    cout << "amount got in(times): " << e_getin << endl;
-    cout << "amount increasings(times) : " << e_better << endl;
-    cout << "Percentage : " << ((double) e_better )/ (e_getin) << endl;
 
     return 0;
 }

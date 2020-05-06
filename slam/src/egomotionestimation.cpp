@@ -81,7 +81,6 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, R
 
     /* point selection */
     select_points();
-    bucketing();
 
     delta = estimate_relative_motion();
 
@@ -192,40 +191,4 @@ void EgomotionEstimation::select_points()
     for (auto idx : active_indeces)
         if (disparities[idx] < conf.far_coeff * base && disparities[idx] > conf.close_coeff * base)
             selection.push_back(RegularFrame::point_reference(current_frame_, idx));
-}
-
-/* reduce features from selection */
-void EgomotionEstimation::bucketing() {
-    int img_width = 0;
-    int img_height = 0;
-
-    for (auto p : current_frame_->image_points_left) {
-        if (p[0] > img_width)
-            img_width = (int) p[0];
-
-        if (p[1] > img_height)
-            img_height = (int) p[1];
-    }
-
-    std::sort(selection.begin(), selection.end(), [] (RegularFrame::point_reference a, RegularFrame::point_reference b) { return a.getAdditional().age > b.getAdditional().age; });
-
-    int buckets_u = img_width / conf.bucketing_widht;
-    int buckets_v = img_height / conf.bucketing_height;
-    vector<vector<RegularFrame::point_reference>>buckets(buckets_u * buckets_v);
-
-    for (auto p : selection) {
-        int b_u = p.get_image_point_left()[0] / conf.bucketing_widht;
-        int b_v = p.get_image_point_left()[1] / conf.bucketing_height;
-
-        if (buckets[b_u + b_v * buckets_v].size() < conf.bucketing_amount)
-            buckets[b_u + b_v * buckets_v].push_back(p);
-    }
-
-    selection.clear();
-    selection.reserve(buckets_u * buckets_v * conf.bucketing_amount);
-
-    for (auto bucket : buckets)
-        for (auto p : bucket)
-            selection.push_back(p);
-
 }

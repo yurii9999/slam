@@ -122,7 +122,6 @@ private:
     Sophus::SE3d estimate_relative_motion(); /* central */
 
     void select_points();
-    void bucketing();
 
 public:
     Sophus::SE3d delta; /* from previos frame to current frame */
