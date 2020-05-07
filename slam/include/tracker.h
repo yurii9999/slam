@@ -31,13 +31,10 @@ public:
     void push_back(uint8_t *I1,uint8_t* I2,int32_t* dims, SE3d *prediction = nullptr);
 
 //private:
-    /* transform image point to bearing vector(openGV terminology) -- unit vector from camera's center */
-    Eigen::Vector3d normolize(Eigen::Vector2d a);
 
     double focal;
     double cv;
     double cu;
-    bool normalize_points = true;
 
     Matcher *matcher;
     shared_ptr<RegularFrame> previous;

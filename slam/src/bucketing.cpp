@@ -5,18 +5,10 @@
 
 using namespace std;
 
-Bucketing::Bucketing(int amount_features_per_cell, int bucket_width, int bucket_height, int width, int height) {
+Bucketing::Bucketing(int amount_features_per_cell, int bucket_width, int bucket_height) {
     amount_ = amount_features_per_cell;
     bucket_w_ = bucket_width;
     bucket_h_ = bucket_height;
-
-    width_ = width;
-    height_ = height;
-
-    amount_buckets_u = width_ / bucket_w_ + 1;
-    amount_buckets_v = height_ / bucket_h_ + 1;
-
-    buckets.resize(amount_buckets_u * amount_buckets_v);
 }
 
 void Bucketing::apply_bucketing(RegularFrame const frame) {

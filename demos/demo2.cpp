@@ -36,13 +36,7 @@ Mat somedrawing_A(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame
     cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
     cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
 
-    vector<Scalar> colors(current_frame.additionals.size(), Scalar(0, 0, 128));
-    for (auto idx : ego.inliers)
-        colors[idx] = Scalar(0, 128, 0);
-
-    for (auto p : ego.selection)
-        colors[p.index] = colors[p.index] * 2;
-
+    vector<Scalar> colors(current_frame.additionals.size(), Scalar(0, 0, 255));
 
     for (auto idx : selection) {
         auto p = current_frame.additionals[idx];
@@ -51,18 +45,6 @@ Mat somedrawing_A(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame
         circle(res_l, Point(l[0], l[1]), 3, colors[p.index], 2);
         circle(res_r, Point(r[0], r[1]), 3, colors[p.index], 2);
     }
-
-    for (auto idx : ego.ransac.inliers_) {
-        if (idx < ego.selection.size()) {
-            Vector2d l = current_frame.image_points_left[ego.selection[idx].index];
-            circle(res_l, Point(l[0], l[1]), 3, Scalar(255, 0, 0), 2);
-        }
-        else {
-            Vector2d r = current_frame.image_points_right[ego.selection[idx - ego.selection.size()].index];
-            circle(res_r, Point(r[0], r[1]), 3, Scalar(255, 0, 0), 2);
-        }
-    }
-
 
     vconcat(res_l, res_r, res_l);
     return res_l;
@@ -87,33 +69,37 @@ int main (int argc, char** argv) {
     cxxopts::Options options("Something", "try to use on kitti dataset");
     options.add_options()
             ("parameters", "Parameters such as ransac threshold, max iteretions etc", cxxopts::value<string>())
-            ("input", "Input parameters such as calibration, path to sequence", cxxopts::value<string>())
+            ("io", "Input parameters such as calibration, path to sequence", cxxopts::value<string>())
+            ("bucketing", "bucketing parameters", cxxopts::value<string>())
             ;
     auto result = options.parse(argc, argv);
 
-    egomotion_parameters params(result["parameters"].as<string>());
-    sequence_parameters input_params(result["input"].as<string>());
+    egomotion_parameters egomotion_params(result["parameters"].as<string>());
+    io_parameters io_params(result["io"].as<string>());
+    bucketing_parameters b_params(result["bucketing"].as<string>());
 
-    if (!params.is_ransac_threshold_defined())
-        params.set_default_ransac_threshold(input_params.focal);
+    if (!egomotion_params.is_ransac_threshold_defined())
+        egomotion_params.set_default_ransac_threshold(io_params.focal);
 
-    params.print();
-    input_params.print();
+    egomotion_params.print();
+    io_params.print();
+    b_params.print();
 
-    Tracker tracker = Factory::get_with_params(input_params);
-    EgomotionEstimation egomotion_estimation = Factory::get_with_params(params, input_params);
+    Tracker tracker = Factory::get_with_params(io_params);
+    EgomotionEstimation egomotion_estimation = Factory::get_with_params(egomotion_params, io_params);
+    Bucketing bucketing = Factory::get_with_params(b_params);
 
     vector<shared_ptr<RegularFrame>> frames;
 
-    string left_img_dir = input_params.sequence_path + "/image_0";
-    string right_img_dir = input_params.sequence_path + "/image_1";
+    string left_img_dir = io_params.sequence_path + "/image_0";
+    string right_img_dir = io_params.sequence_path + "/image_1";
 
     cv::Mat img_l;
     cv::Mat img_r;
 
     Sophus::SE3d delta;
 
-    int i_frame = input_params.first_frame;
+    int i_frame = io_params.first_frame;
 
     ofstream output;
     SE3d current_pose;
@@ -123,9 +109,6 @@ int main (int argc, char** argv) {
     int e_better = 0;
     int e_amount = 0;
 
-    Bucketing bucketing(2, 50, 50, 1300, 300);
-
-
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
         string left_img_file_name  = left_img_dir + image_name;
@@ -134,14 +117,14 @@ int main (int argc, char** argv) {
         img_r = imread(right_img_file_name, CV_LOAD_IMAGE_GRAYSCALE);
 
         /* works strange..... */
-        if (i_frame > input_params.first_frame + 1 && params.try_predict_motion) /* could make motion prediction */
+        if (i_frame > io_params.first_frame + 1 && egomotion_params.try_predict_motion) /* could make motion prediction */
             tracker.push_back(img_l, img_r, &delta);
         else
             tracker.push_back(img_l, img_r);
 
         frames.push_back(tracker.current);
 
-        if (i_frame  == input_params.first_frame) {
+        if (i_frame  == io_params.first_frame) {
             i_frame++;
             bucketing.set_frame_size(img_l.rows, img_l.cols);
 
@@ -155,17 +138,17 @@ int main (int argc, char** argv) {
 
         bucketing.apply_bucketing(current_frame);
 
-//        delta = egomotion_estimation.estimate_motion(current_frame, previous_frame, bucketing.selection);
+        delta = egomotion_estimation.estimate_motion(current_frame, previous_frame, bucketing.selection);
 
         current_pose = current_pose * delta;
         write_pose(output, current_pose);
 
-        cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << egomotion_estimation.inliers.size() << "\ncorrespondences: " << egomotion_estimation.selection.size() << "\tRansac inliers: " << egomotion_estimation.ransac.inliers_.size() << endl;
+        cout << "EgomotionEstimation: i = " << i_frame << "\tAmount features: " << current_frame.additionals.size() << "\t Amount inliers: " << egomotion_estimation.inliers.size() << endl;
         cout << "Iterations " << egomotion_estimation.ransac.iterations_ << endl;
         e_iter += egomotion_estimation.ransac.iterations_;
         ++e_amount;
 
-        if (params.output_images) {
+        if (io_params.write_images) {
 //            Mat res = somedrawing_A(img_l, img_r, egomotion_estimation, current_frame, previous_frame, bucketing.selection);
             Mat res;
             cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
@@ -179,11 +162,11 @@ int main (int argc, char** argv) {
             }
 
 
-            imwrite(params.output_dir+ string(image_name), res);
+            imwrite(io_params.output_dir+ string(image_name), res);
         }
 
         i_frame++;
-    } while(img_l.data && i_frame != input_params.amount_frames + input_params.first_frame);
+    } while(img_l.data && i_frame != io_params.amount_frames + io_params.first_frame);
 
     output.close();
 

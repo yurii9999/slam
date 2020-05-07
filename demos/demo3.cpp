@@ -90,23 +90,25 @@ int main (int argc, char** argv) {
     cxxopts::Options options("Something", "try to use on kitti dataset");
     options.add_options()
             ("segmentation", "xml with segmentation parameters", cxxopts::value<string>())
-            ("input", "Input parameters such as calibration, path to sequence", cxxopts::value<string>())
-            ("egomotion", "Egomotion parameters", cxxopts::value<string>());
+            ("io", "Input parameters such as calibration, path to sequence", cxxopts::value<string>())
+            ("egomotion", "Egomotion parameters", cxxopts::value<string>())
+            ("bucketing", "bucketing parameters", cxxopts::value<string>());
     auto result = options.parse(argc, argv);
 
     segmentation_parameters segmentation_params(result["segmentation"].as<string>());
-    sequence_parameters sequence_params(result["input"].as<string>());
+    io_parameters sequence_params(result["input"].as<string>());
     egomotion_parameters egomotion_params(result["egomotion"].as<string>());
+    bucketing_parameters bucketing_params(result["bucketing"].as<string>());
 
     sequence_params.print();
     segmentation_params.print();
     egomotion_params.print();
+    bucketing_params.print();
 
     Tracker tracker = Factory::get_with_params(sequence_params);
     Segmentation segmentation = Factory::get_with_params(segmentation_params, sequence_params);
     EgomotionEstimation egomotion = Factory::get_with_params(egomotion_params, sequence_params);
-
-    Bucketing bucketing(2, 50, 50, 1300, 300);
+    Bucketing bucketing = Factory::get_with_params(bucketing_params);
 
     vector<shared_ptr<RegularFrame>> frames;
 
@@ -195,9 +197,10 @@ int main (int argc, char** argv) {
         }
 
         sort(a.begin(), a.end(), [&residuals] (int a, int b) { return residuals[a] > residuals[b]; });
-
-        draw_component(res, segmentation.components[a[0]], current_frame, Scalar(255, 0, 0));
-        cout << "So, i = " << i_frame << "\tresidual = " << residuals[a[0]] << endl ;
+        for (auto idx : a) {
+            if (residuals[idx] > 0.0000001)
+                draw_component(res, segmentation.components[idx], current_frame, Scalar(255, 0, 0));
+        }
 
         imwrite("destt"+ string(image_name), res);
 

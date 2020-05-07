@@ -66,14 +66,10 @@ private:
     Vector3d getdXdv(Vector2d left, Vector2d right);
 
     void estimate_derivatives();
-    void estimate_additional_derivatives();
 
     void build_jacobians();
 
     void build_graph();
-
-    /* fuse components to one point with average values through all elements of each component */
-    void second_refiment();
 
     Vector3d estimate_derivative(
             int data_idx,

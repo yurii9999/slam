@@ -25,38 +25,32 @@ using namespace std;
 
 void EgomotionEstimation::triangulate_current_frame() {
     temp_map.clear();
-    temp_map.resize(current_frame_->additionals.size());
+    temp_map.resize(active_indeces.size());
 
-    disparities.clear();
-    disparities.resize(current_frame_->additionals.size());
-
-    opengv::bearingVectors_t b1(current_frame_->additionals.size());
-    opengv::bearingVectors_t b2(current_frame_->additionals.size());
-
-    for (auto p : current_frame_->additionals) {
-        RegularFrame::point_reference prev = p.get_it_on_previous();
-//        b1[p.index] = prev.get_bearing_vector_left();
-//        b2[p.index] = prev.get_bearing_vector_right();
-
-
+    for (int i = 0; i < active_indeces.size(); i++) {
+        RegularFrame::point_reference prev = current_frame_->additionals[active_indeces[i]].get_it_on_previous();
         Vector2d l = prev.get_image_point_left();
         Vector2d r = prev.get_image_point_right();
 
         double disparity = fmax(l[0] - r[0], 0.001);
-
-        disparities[p.index] = disparity;
-        temp_map[p.index] = Vector3d(
+        temp_map[i] = Vector3d(
                     (l[0] - cu) * base / disparity,
                     (l[1] - cv) * base / disparity,
                     base * focal / disparity
                 );
     }
+}
 
-//    opengv::relative_pose::CentralRelativeAdapter adapter_triangulation(b1, b2, camOffsets[1], camRotations[1]);
+void EgomotionEstimation::compute_bearing_vectors() {
+    temp_bearing.clear();
+    temp_bearing.resize(active_indeces.size());
 
-//    for (auto p : current_frame_->additionals)
-//        temp_map[p.index] = opengv::triangulation::triangulate(adapter_triangulation, p.index);
+    for (int i = 0; i < active_indeces.size(); i++) {
+        Vector2d p = current_frame_->image_points_left[active_indeces[i]];
+        Vector3d bearing((p[0] - cu) / focal, (p[1] - cv) / focal, 1);
 
+        temp_bearing[i] = bearing / bearing.norm();
+    }
 }
 
 Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &curr, RegularFrame &prev) {
@@ -67,50 +61,27 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &curr, RegularFra
     return estimate_motion(curr, prev, indeces);
 }
 
-Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame, vector<int> indeces) {
-    active_indeces = indeces;
+Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame, vector<int> indices) {
+    active_indeces = indices;
     current_frame_ = &current_frame;
     previous_frame_ = &previous_frame;
 
     /* compute bearing vectors */
-    previous_frame.compute_bearing_vectors(focal, cu, cv);
-    current_frame.compute_bearing_vectors(focal, cu, cv);
+    compute_bearing_vectors();
 
-    /* triangulation */
+    /* build temp map */
     triangulate_current_frame();
-
-    /* point selection */
-    select_points();
 
     delta = estimate_relative_motion();
 
     /* determine inliers */
-    switch (conf.inliers_determination_policy_) {
-    case configuration::REPROJECTION_ERROR:
-        determine_inliers_reprojection_error();
-        break;
-    case configuration::ANGEL_BETWEEN_RAYS:
-        determine_inliers();
-        break;
-    }
+    determine_inliers();
 
     return delta;
 }
 
 Sophus::SE3d EgomotionEstimation::estimate_relative_motion() {
-    /* build opengv adapter */
-    opengv::bearingVectors_t bearing_vectors(selection.size());
-    opengv::points_t points(selection.size());
-
-    int i = 0;
-    for (auto p : selection) {
-        bearing_vectors[i] = p.get_bearing_vector_left();
-
-        points[i] = temp_map[p.index];
-        i++;
-    }
-
-    opengv::absolute_pose::CentralAbsoluteAdapter adapter(bearing_vectors, points);
+    opengv::absolute_pose::CentralAbsoluteAdapter adapter(temp_bearing, temp_map);
 
     std::shared_ptr<sac_problem> absposeproblem_ptr(new sac_problem(adapter));
 
@@ -134,21 +105,21 @@ void EgomotionEstimation::determine_inliers() {
 
     Sophus::SE3d deltaInverse = delta.inverse();
 
-    for (auto p : current_frame_->additionals) {
-        Vector3d estimated_bv_left = deltaInverse * temp_map[p.index];
-        estimated_bv_left.normalize(); /* vector that should be close to corresponded bearing vector on the left camera */
-        Vector3d estimated_bv_right = deltaInverse * temp_map[p.index] - Vector3d(base, 0, 0);
-        estimated_bv_right.normalize();
+//    for (auto p : current_frame_->additionals) {
+//        Vector3d estimated_bv_left = deltaInverse * temp_map[p.index];
+//        estimated_bv_left.normalize(); /* vector that should be close to corresponded bearing vector on the left camera */
+//        Vector3d estimated_bv_right = deltaInverse * temp_map[p.index] - Vector3d(base, 0, 0);
+//        estimated_bv_right.normalize();
 
-        double res_l = 1 - (current_frame_->bearingVectors_left[p.index]).dot(estimated_bv_left); /* = 1 - cos */
-        double res_r = 1 - (current_frame_->bearingVectors_right[p.index]).dot(estimated_bv_right);
+//        double res_l = 1 - (current_frame_->bearingVectors_left[p.index]).dot(estimated_bv_left); /* = 1 - cos */
+//        double res_r = 1 - (current_frame_->bearingVectors_right[p.index]).dot(estimated_bv_right);
 
-        residual_l[p.index] = res_l;
-        residual_r[p.index] = res_r;
+//        residual_l[p.index] = res_l;
+//        residual_r[p.index] = res_r;
 
-        if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
-            inliers.push_back(p.index);
-    }
+//        if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
+//            inliers.push_back(p.index);
+//    }
 }
 
 void EgomotionEstimation::determine_inliers_reprojection_error() {
@@ -181,13 +152,4 @@ void EgomotionEstimation::determine_inliers_reprojection_error() {
     }
 
 
-}
-
-void EgomotionEstimation::select_points()
-{
-    selection.clear();
-    selection.reserve(active_indeces.size());
-
-    for (auto idx : active_indeces)
-        selection.push_back(RegularFrame::point_reference(current_frame_, idx));
 }

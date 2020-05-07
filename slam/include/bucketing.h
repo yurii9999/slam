@@ -8,7 +8,7 @@ using std::vector;
 class Bucketing
 {
 public:
-    Bucketing(int amount_features_per_cell, int bucket_width, int bucket_height, int width, int height);
+    Bucketing(int amount_features_per_cell, int bucket_width, int bucket_height);
 
     void apply_bucketing(RegularFrame const frame);
 

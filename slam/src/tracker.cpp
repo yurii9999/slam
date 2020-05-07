@@ -5,14 +5,6 @@
 
 using std::vector;
 
-//Eigen::Vector3d Tracker::normolize(Eigen::Vector2d a) {
-
-//    Eigen::Vector3d res((a[0] - cu) / focal, (a[1] - cv) / focal, 1);
-//    res /= res.norm();
-
-//    return res;
-//}
-
 void Tracker::push_back(const cv::Mat &img_l, const cv::Mat &img_r, Sophus::SE3d *prediction)
 {
     int height = img_l.size[0];

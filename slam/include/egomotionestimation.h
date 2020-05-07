@@ -29,42 +29,16 @@ class EgomotionEstimation
 {
 public:
     struct configuration {
-        enum selection_policy { SELECT_ALL, SELECT_CLOSE, SELECT_FAR};
-        enum inliers_determination_policy { ANGEL_BETWEEN_RAYS, REPROJECTION_ERROR };
-//        enum egomotion_estimation_policy { NONCENTRAL_3D_2D, CENTRAL_3D_2D };
-        enum triangulation_policy { FROM_PREVIOUS_FRAME, WITH_BEST_DISPARITY };
-
-        selection_policy selection_policy_ = SELECT_ALL;
-        inliers_determination_policy inliers_determination_policy_ = REPROJECTION_ERROR;
-        triangulation_policy triangulation_policy_ = FROM_PREVIOUS_FRAME;
-
-        bool using_nonlinear_optimization = true;
-
         double ransac_threshold = 0.001;
         int ransac_max_iterations = 100;
-
-        double far_coeff = 100;
-        double close_coeff = 40;
-        /* select only points with disparity < far_c * base && > close_c * base */
-//         "far_coeff" cause point is far enough to consider it
-
-        int bucketing_amount = 2;
-        int bucketing_widht = 50;
-        int bucketing_height = 50;
 
         double final_th = 1.0;
         configuration() {}
         configuration(
-                inliers_determination_policy idp,
-                triangulation_policy tp,
-                bool using_nonlinear_optimization,
                 double ransac_threshold,
                 int ransac_max_iterations,
                 double final_th
                 ) {
-            inliers_determination_policy_ = idp;
-            triangulation_policy_ = tp;
-            this->using_nonlinear_optimization = using_nonlinear_optimization;
             this->ransac_threshold = ransac_threshold;
             this->ransac_max_iterations = ransac_max_iterations;
             this->final_th = final_th;
@@ -85,12 +59,11 @@ public:
     /* parameters */
     configuration conf;
 
-    /* additional output */
-    vector<RegularFrame::point_reference> selection;
-
-    vector<double>disparities; /* disparities with which was points triangulated */ /* not used now cause it could be gotten from temp_map[i] Z'th coordinate */
-    vector<Vector3d> temp_map;
+    opengv::points_t temp_map;
     void triangulate_current_frame();
+
+    opengv::bearingVectors_t temp_bearing;
+    void compute_bearing_vectors();
 
     EgomotionEstimation(double focal, double cu, double cv, double base) {
         this->focal = focal;
@@ -117,11 +90,13 @@ private:
     RegularFrame *current_frame_;
     RegularFrame *previous_frame_;
 
-//    vector<double> disparities;
-
-    Sophus::SE3d estimate_relative_motion(); /* central */
+    Sophus::SE3d estimate_relative_motion();
 
     void select_points();
+
+    /* get from scene 3d point with index idx on current frame */
+    /* now Triangulate point from previous frame with index idx on current frame */
+    Vector3d get_scene_point(int idx);
 
 public:
     Sophus::SE3d delta; /* from previos frame to current frame */

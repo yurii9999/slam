@@ -14,7 +14,7 @@ using namespace std;
 /* parse sequence parameters from xml */
 /* kitti sequences -- odometry */
 
-struct sequence_parameters
+struct io_parameters
 {
     string sequence_path = "";
     string calib_filename = "";
@@ -27,6 +27,9 @@ struct sequence_parameters
 
     int first_frame = 0;
 
+    bool write_images = false;
+    string output_dir = "newdir";
+
     vector<double> parse_calib_params(string line) {
         line.erase(line.begin(), line.begin() + 4); /* "P0: " */
 
@@ -38,7 +41,7 @@ struct sequence_parameters
                     );
     }
 
-    sequence_parameters(string filename) {
+    io_parameters(string filename) {
         rapidxml::file<> xmlFile(filename.c_str());
         rapidxml::xml_document<> doc;
         doc.parse<0>(xmlFile.data());
@@ -57,6 +60,17 @@ struct sequence_parameters
         rapidxml::xml_node<> *ff = doc.first_node("first_frame");
         if (ff)
             first_frame = stoi(ff->value());
+
+        rapidxml::xml_node<> *output_images_node = doc.first_node("save_images");
+        if (output_images_node) {
+            write_images = stoi(output_images_node->value());
+
+            if (write_images) {
+                rapidxml::xml_node<> *dir = doc.first_node("save_dir");
+                if (dir)
+                    output_dir = dir->value();
+            }
+        }
 
         /* parse calibration parameters */
         ifstream input;
@@ -88,5 +102,9 @@ struct sequence_parameters
         cout << "cu = " << cu << endl;
         cout << "cv = " << cv << endl;
         cout << "baseline = " << base << endl;
+
+        cout << "======" << endl << "Output parameters: " << endl << "Write images: " << write_images << endl;
+        if (write_images)
+            cout << "Dir: " << output_dir << endl;
     }
 };
