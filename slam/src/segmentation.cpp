@@ -106,9 +106,8 @@ void Segmentation::build_graph() {
 
         Matrix3d J_ij = Jacobians[idx_a] - Jacobians[idx_b];
         Vector3d delta = derivatives[idx_a] - derivatives[idx_b];
-        Matrix3d covariace_inv = J_ij * J_ij.transpose(); // hmmm
+        Matrix3d covariace_inv = J_ij.transpose() * J_ij;
         double difference = sqrt(delta.transpose() * covariace_inv * delta);
-//        double difference = (derivatives[idx_a] - derivatives[idx_b]).norm();
 
         if (difference < threshold)
             edges.push_back(edge(idx_a, idx_b, difference));

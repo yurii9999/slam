@@ -86,7 +86,7 @@ public:
     Sophus::SE3d estimate_motion(RegularFrame &curr, RegularFrame &prev);
 
 private:
-    vector<int> active_indeces;
+    vector<int> active_indices;
     RegularFrame *current_frame_;
     RegularFrame *previous_frame_;
 
@@ -105,5 +105,9 @@ public:
     vector<double> residual_r;
     vector<int> inliers;
     void determine_inliers(); /* Check all obervation in current_frame_ is it inlier by comparison angels between rays */
+
+    /* Finds inliers in points with indices in 'indices' that fit in current motion model */
+    void determine_inliers(vector<int> indices);
+
     void determine_inliers_reprojection_error(); /* by compute reprojection error */
 };

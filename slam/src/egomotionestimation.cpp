@@ -25,10 +25,10 @@ using namespace std;
 
 void EgomotionEstimation::triangulate_current_frame() {
     temp_map.clear();
-    temp_map.resize(active_indeces.size());
+    temp_map.resize(active_indices.size());
 
-    for (int i = 0; i < active_indeces.size(); i++) {
-        RegularFrame::point_reference prev = current_frame_->additionals[active_indeces[i]].get_it_on_previous();
+    for (int i = 0; i < active_indices.size(); i++) {
+        RegularFrame::point_reference prev = current_frame_->additionals[active_indices[i]].get_it_on_previous();
         Vector2d l = prev.get_image_point_left();
         Vector2d r = prev.get_image_point_right();
 
@@ -43,10 +43,10 @@ void EgomotionEstimation::triangulate_current_frame() {
 
 void EgomotionEstimation::compute_bearing_vectors() {
     temp_bearing.clear();
-    temp_bearing.resize(active_indeces.size());
+    temp_bearing.resize(active_indices.size());
 
-    for (int i = 0; i < active_indeces.size(); i++) {
-        Vector2d p = current_frame_->image_points_left[active_indeces[i]];
+    for (int i = 0; i < active_indices.size(); i++) {
+        Vector2d p = current_frame_->image_points_left[active_indices[i]];
         Vector3d bearing((p[0] - cu) / focal, (p[1] - cv) / focal, 1);
 
         temp_bearing[i] = bearing / bearing.norm();
@@ -62,7 +62,7 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &curr, RegularFra
 }
 
 Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, RegularFrame &previous_frame, vector<int> indices) {
-    active_indeces = indices;
+    active_indices = indices;
     current_frame_ = &current_frame;
     previous_frame_ = &previous_frame;
 
@@ -73,9 +73,6 @@ Sophus::SE3d EgomotionEstimation::estimate_motion(RegularFrame &current_frame, R
     triangulate_current_frame();
 
     delta = estimate_relative_motion();
-
-    /* determine inliers */
-    determine_inliers();
 
     return delta;
 }
@@ -96,30 +93,27 @@ Sophus::SE3d EgomotionEstimation::estimate_relative_motion() {
 /* determine points that in both frames(L & R) fit in motion model */
 void EgomotionEstimation::determine_inliers() {
     residual_l.clear();
-    residual_r.clear();
-
     residual_l.resize(current_frame_->additionals.size());
-    residual_r.resize(current_frame_->additionals.size());
-
     inliers.clear();
 
     Sophus::SE3d deltaInverse = delta.inverse();
+    for (int i = 0; i < active_indices.size(); i++) {
+        Vector3d estimated_bv_left = deltaInverse * temp_map[i];
+        estimated_bv_left.normalize(); /* vector that should be close to corresponded bearing vector on the left camera */
+        double res_l = 1 - (temp_bearing[i]).dot(estimated_bv_left); /* = 1 - cos */
 
-//    for (auto p : current_frame_->additionals) {
-//        Vector3d estimated_bv_left = deltaInverse * temp_map[p.index];
-//        estimated_bv_left.normalize(); /* vector that should be close to corresponded bearing vector on the left camera */
-//        Vector3d estimated_bv_right = deltaInverse * temp_map[p.index] - Vector3d(base, 0, 0);
-//        estimated_bv_right.normalize();
+        if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
+            inliers.push_back(active_indices[i]);
+    }
+}
 
-//        double res_l = 1 - (current_frame_->bearingVectors_left[p.index]).dot(estimated_bv_left); /* = 1 - cos */
-//        double res_r = 1 - (current_frame_->bearingVectors_right[p.index]).dot(estimated_bv_right);
+void EgomotionEstimation::determine_inliers(vector<int> points) {
+    active_indices = points;
 
-//        residual_l[p.index] = res_l;
-//        residual_r[p.index] = res_r;
+    triangulate_current_frame();
+    compute_bearing_vectors();
 
-//        if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
-//            inliers.push_back(p.index);
-//    }
+    determine_inliers();
 }
 
 void EgomotionEstimation::determine_inliers_reprojection_error() {
@@ -150,6 +144,4 @@ void EgomotionEstimation::determine_inliers_reprojection_error() {
         if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
             inliers.push_back(p.index);
     }
-
-
 }

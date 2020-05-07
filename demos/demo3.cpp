@@ -44,8 +44,8 @@ Scalar generate_color(int num) {
 
 void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame) {
     int num = 213312;
-    for (auto component : segmentation.graph.components) {
-        if (component.size() > 5) {
+    for (auto component : segmentation.components) {
+        if (component.size() > 1) {
             Scalar color = generate_color(num);
             for (auto idx : component) {
                 Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
@@ -61,29 +61,17 @@ void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame
         }
     }
     num = 213312;
-    for (auto component : segmentation.graph.components) {
-        if (component.size() > 5) {
-            Scalar color = generate_color(num);
-            for (auto idx : component) {
-                Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
-                circle(img, a, 3, color, 2);
-            }
+    for (auto component : segmentation.components) {
+
+        Scalar color = generate_color(num);
+        for (auto idx : component) {
+            Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
+            circle(img, a, 3, color, 2);
 
             num += 157;
         }
+
     }
-//    for (auto e : segmentation.graph) {
-//        Point a(current_frame.image_points_left[e.a_index][0], current_frame.image_points_left[e.a_index][1]);
-//        Point b(current_frame.image_points_left[e.b_index][0], current_frame.image_points_left[e.b_index][1]);
-
-//        // BGR
-//        Scalar color(0, 0, 255);
-//        if (e.difference < th)
-//            color = Scalar(0, 255, 0);
-
-//        line(img, a, b, color, 2);
-//    }
-
 }
 
 int main (int argc, char** argv) {
@@ -96,7 +84,7 @@ int main (int argc, char** argv) {
     auto result = options.parse(argc, argv);
 
     segmentation_parameters segmentation_params(result["segmentation"].as<string>());
-    io_parameters sequence_params(result["input"].as<string>());
+    io_parameters sequence_params(result["io"].as<string>());
     egomotion_parameters egomotion_params(result["egomotion"].as<string>());
     bucketing_parameters bucketing_params(result["bucketing"].as<string>());
 
@@ -114,10 +102,6 @@ int main (int argc, char** argv) {
 
     int i_frame = sequence_params.first_frame;
     Mat img_l, img_r;
-
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
-
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
         string left_img_file_name  = sequence_params.sequence_path + "/image_0" + image_name;
@@ -141,13 +125,9 @@ int main (int argc, char** argv) {
         bucketing.apply_bucketing(current_frame);
 
         /* Se3d delta = */ egomotion.estimate_motion(current_frame, previous_frame, bucketing.selection);
-        std::chrono::time_point<std::chrono::system_clock> start1, end1;
-        start1 = std::chrono::system_clock::now();
-        segmentation.exec(current_frame, bucketing.selection);
+        egomotion.determine_inliers();
 
-        end1 = std::chrono::system_clock::now();
-        int elapsed_seconds1 = std::chrono::duration_cast<std::chrono::milliseconds> (end1-start1).count();
-        cout << "Hm, (msec): " << elapsed_seconds1 << endl;
+        segmentation.exec(current_frame, bucketing.selection);
 
         Mat res;
         cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
@@ -197,10 +177,7 @@ int main (int argc, char** argv) {
         }
 
         sort(a.begin(), a.end(), [&residuals] (int a, int b) { return residuals[a] > residuals[b]; });
-        for (auto idx : a) {
-            if (residuals[idx] > 0.0000001)
-                draw_component(res, segmentation.components[idx], current_frame, Scalar(255, 0, 0));
-        }
+        draw_component(res, segmentation.components[a[0]], current_frame, Scalar(255, 0, 0));
 
         imwrite("destt"+ string(image_name), res);
 
@@ -208,14 +185,4 @@ int main (int argc, char** argv) {
 
         i_frame++;
     } while(img_l.data && i_frame != sequence_params.amount_frames + sequence_params.first_frame);
-
-    end = std::chrono::system_clock::now();
-    int elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds> (end-start).count();
-    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-
-    std::cout << "Время выполнения: " << elapsed_seconds << endl;
-    int av_sec = std::chrono::duration_cast<std::chrono::seconds> ((end-start) / sequence_params.amount_frames ).count();
-    std::cout << "Average per frame: " << av_sec << endl;
-    cout << "(sec)" << endl;
-
 }
