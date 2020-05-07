@@ -8,6 +8,7 @@
 #include "viso2/matcher.h"
 #include "tracker.h"
 #include "segmentation.h"
+#include "bucketing.h"
 
 #include "opencv2/core.hpp"
 #include "opencv2/highgui.hpp"
@@ -36,16 +37,15 @@ void draw(Mat &img, Vector2d feature, Scalar color) {
 }
 
 Scalar generate_color(int num) {
-    int r = (127 + num * 7 % 255);
-    int g = (63 + num * 11 % 255);
-    int b = (87 + num * 13 % 255);
-    return Scalar(b, g, r);
+    RNG rng(12345 + num * 10);
+    Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
+    return color;
 }
 
 void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame) {
     int num = 213312;
     for (auto component : segmentation.graph.components) {
-        if (component.size() > 1) {
+        if (component.size() > 5) {
             Scalar color = generate_color(num);
             for (auto idx : component) {
                 Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
@@ -106,6 +106,8 @@ int main (int argc, char** argv) {
     Segmentation segmentation = Factory::get_with_params(segmentation_params, sequence_params);
     EgomotionEstimation egomotion = Factory::get_with_params(egomotion_params, sequence_params);
 
+    Bucketing bucketing(2, 50, 50, 1300, 300);
+
     vector<shared_ptr<RegularFrame>> frames;
 
     int i_frame = sequence_params.first_frame;
@@ -126,6 +128,7 @@ int main (int argc, char** argv) {
 
 
         if (i_frame  == sequence_params.first_frame) {
+            bucketing.set_frame_size(img_l.rows, img_l.cols);
             i_frame++;
             continue;
         }
@@ -133,43 +136,68 @@ int main (int argc, char** argv) {
         RegularFrame &current_frame = *tracker.current;
         RegularFrame &previous_frame = *tracker.previous;
 
-        /* Se3d delta = */ egomotion.estimate_motion(current_frame, previous_frame);
+        bucketing.apply_bucketing(current_frame);
+
+        /* Se3d delta = */ egomotion.estimate_motion(current_frame, previous_frame, bucketing.selection);
         std::chrono::time_point<std::chrono::system_clock> start1, end1;
         start1 = std::chrono::system_clock::now();
-        segmentation.exec(current_frame);
+        segmentation.exec(current_frame, bucketing.selection);
+
         end1 = std::chrono::system_clock::now();
         int elapsed_seconds1 = std::chrono::duration_cast<std::chrono::milliseconds> (end1-start1).count();
         cout << "Hm, (msec): " << elapsed_seconds1 << endl;
 
         Mat res;
         cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
-        draw_graph(res, segmentation, current_frame);
+//        draw_graph(res, segmentation, current_frame);
 
-        for (auto segment : segmentation.graph.components) {
-            if (segment.size() == 1)
+//        int num = 0;
+//        for (auto segment : segmentation.components) {
+//            Scalar color = generate_color(num);
+//            for (auto idx_a : segment) {
+//                for (auto idx_b : segment) {
+//                    Vector2d l1 = current_frame.image_points_left[idx_a];
+//                    Vector2d l2 = current_frame.image_points_left[idx_b];
+//                    line(res, Point(l1[0], l1[1]), Point(l2[0], l2[1]), color, 1);
+//                }
+//            }
+
+//            color = generate_color(num + 10);
+//            for (auto idx_a : segment) {
+//                Vector2d l2 = current_frame.image_points_left[idx_a];
+//                circle(res, Point(l2[0], l2[1]), 5, color, 2);
+//            }
+//            ++num;
+//        }
+
+
+        vector<double> residuals(segmentation.components.size());
+        for (int i = 0 ; i < segmentation.components.size(); i++ ) {
+            vector<int> &segment = segmentation.components[i];
+            if (segment.size() < 3) {
+                residuals[i] = -1;
                 continue;
+            }
 
-            Vector2d average_center;
             double average_residual = 0.0;
             for (int idx : segment) {
-                average_center += current_frame.image_points_left[idx];
-                average_residual += egomotion.residual_l[idx];
+                average_residual += egomotion.residual_l[idx] * egomotion.residual_l[idx];
             }
 
             average_residual /= segment.size();
-            average_center /= segment.size();
 
-            if (average_residual > 0.0005) {
-//                draw_component(res, segment, current_frame, Scalar(0, 255, 0));
-            }
+            residuals[i] = average_residual;
         }
 
-        for (auto p : current_frame.additionals) {
-            Vector2d &ip = current_frame.image_points_left[p.index];
-            Point a(ip[0], ip[1]);
-
-            circle(res, a, 2, Scalar(255,0,0),2);
+        vector<int> a;
+        for (int i = 0 ; i < residuals.size(); i++) {
+            a.push_back(i);
         }
+
+        sort(a.begin(), a.end(), [&residuals] (int a, int b) { return residuals[a] > residuals[b]; });
+
+        draw_component(res, segmentation.components[a[0]], current_frame, Scalar(255, 0, 0));
+        cout << "So, i = " << i_frame << "\tresidual = " << residuals[a[0]] << endl ;
 
         imwrite("destt"+ string(image_name), res);
 

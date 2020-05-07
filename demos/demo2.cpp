@@ -14,8 +14,9 @@
 #include "opencv2/imgproc.hpp"
 
 #include "tracker.h"
+#include "bucketing.h"
 #include "egomotionestimation.h"
-#include "../../external/include/sophus/se3.hpp"
+#include "sophus/se3.hpp"
 
 #include "additional/sequence_parameters.h"
 #include "additional/egomotion_parameters.h"
@@ -24,7 +25,13 @@
 using namespace std;
 using namespace cv;
 
-Mat somedrawing_A(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
+Scalar geterateColor(int i) {
+    RNG rng(12345 + i * 10);
+    Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
+    return color;
+}
+
+Mat somedrawing_A(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame, vector<int> selection) {
     Mat res_l, res_r;
     cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
     cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
@@ -37,7 +44,8 @@ Mat somedrawing_A(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame
         colors[p.index] = colors[p.index] * 2;
 
 
-    for (auto p : current_frame.additionals) {
+    for (auto idx : selection) {
+        auto p = current_frame.additionals[idx];
         Vector2d l = current_frame.image_points_left[p.index];
         Vector2d r = current_frame.image_points_right[p.index];
         circle(res_l, Point(l[0], l[1]), 3, colors[p.index], 2);
@@ -55,114 +63,6 @@ Mat somedrawing_A(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame
         }
     }
 
-
-    vconcat(res_l, res_r, res_l);
-    return res_l;
-}
-
-Mat somedrawing_B0reproj(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
-    int resize_coeff_u = 4;
-    int resize_coeff_v = 4;
-    Mat res_l, res_r;
-    cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
-    cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
-
-    resize(res_l, res_l, Size(res_l.cols * resize_coeff_u, res_l.rows * resize_coeff_v));
-    resize(res_r, res_r, Size(res_r.cols * resize_coeff_u, res_r.rows * resize_coeff_v));
-
-    Scalar color(255, 0, 0);
-
-    for (auto p : current_frame.additionals) {
-        Vector2d l = current_frame.image_points_left[p.index];
-        Vector2d r = current_frame.image_points_right[p.index];
-
-        stringstream ss1;
-        ss1.setf(ios::fixed);
-        ss1.precision(1);
-        ss1 << ego.residual_l[p.index];
-
-        stringstream ss2;
-        ss2.setf(ios::fixed);
-        ss2.precision(1);
-        ss2 << ego.residual_r[p.index];
-
-        putText(res_l, ss1.str(), Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
-        circle(res_l, Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), 2, color);
-        putText(res_r, ss2.str(), Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
-        circle(res_r, Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), 2, color);
-    }
-
-    vconcat(res_l, res_r, res_l);
-    return res_l;
-}
-
-Mat somedrawing_B1disp(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
-    int resize_coeff_u = 4;
-    int resize_coeff_v = 4;
-    Mat res_l, res_r;
-    cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
-    cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
-
-    resize(res_l, res_l, Size(res_l.cols * resize_coeff_u, res_l.rows * resize_coeff_v));
-    resize(res_r, res_r, Size(res_r.cols * resize_coeff_u, res_r.rows * resize_coeff_v));
-
-    Scalar color(0, 255, 0);
-
-    for (auto p : current_frame.additionals) {
-        Vector2d l = current_frame.image_points_left[p.index];
-        Vector2d r = current_frame.image_points_right[p.index];
-
-        stringstream ss1;
-        ss1.setf(ios::fixed);
-        ss1.precision(3);
-        ss1 << ego.disparities[p.index];
-
-        stringstream ss2;
-        ss2.setf(ios::fixed);
-        ss2.precision(1);
-        ss2 << ego.disparities[p.index];
-
-        putText(res_l, ss1.str(), Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
-        circle(res_l, Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), 2, color);
-        putText(res_r, ss2.str(), Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
-        circle(res_r, Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), 2, color);
-    }
-
-    vconcat(res_l, res_r, res_l);
-    return res_l;
-}
-
-Mat somedrawing_B2angle(Mat &img_l, Mat &img_r, EgomotionEstimation &ego, RegularFrame &current_frame, RegularFrame &previous_frame) {
-    int resize_coeff_u = 4;
-    int resize_coeff_v = 4;
-    Mat res_l, res_r;
-    cv::cvtColor(img_l, res_l, cv::COLOR_GRAY2BGR);
-    cv::cvtColor(img_r, res_r, cv::COLOR_GRAY2BGR);
-
-    resize(res_l, res_l, Size(res_l.cols * resize_coeff_u, res_l.rows * resize_coeff_v));
-    resize(res_r, res_r, Size(res_r.cols * resize_coeff_u, res_r.rows * resize_coeff_v));
-
-    Scalar color(0, 0, 255);
-
-    for (auto p : current_frame.additionals) {
-        Vector2d l = current_frame.image_points_left[p.index];
-        Vector2d r = current_frame.image_points_right[p.index];
-
-        stringstream ss1;
-        ss1.setf(ios::fixed);
-        ss1.precision(8);
-        ss1 << ego.residual_l[p.index];
-
-        stringstream ss2;
-        ss2.setf(ios::fixed);
-        ss2.precision(8);
-        ss2 << ego.residual_r[p.index];
-
-        putText(res_l, ss1.str(), Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
-        circle(res_l, Point2f(l[0] * resize_coeff_u,l[1] * resize_coeff_v), 2, color);
-        putText(res_r, ss2.str(), Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), FONT_HERSHEY_PLAIN, 0.8,  color);
-        circle(res_r, Point2f(r[0] * resize_coeff_u,r[1] * resize_coeff_v), 2, color);
-    }
 
     vconcat(res_l, res_r, res_l);
     return res_l;
@@ -223,7 +123,8 @@ int main (int argc, char** argv) {
     int e_better = 0;
     int e_amount = 0;
 
-    B
+    Bucketing bucketing(2, 50, 50, 1300, 300);
+
 
     do {
         char image_name[256]; sprintf(image_name,"/%06d.png",i_frame );
@@ -242,6 +143,7 @@ int main (int argc, char** argv) {
 
         if (i_frame  == input_params.first_frame) {
             i_frame++;
+            bucketing.set_frame_size(img_l.rows, img_l.cols);
 
             write_pose(output, current_pose);
 
@@ -251,7 +153,9 @@ int main (int argc, char** argv) {
         RegularFrame &current_frame = *tracker.current;
         RegularFrame &previous_frame = *tracker.previous;
 
-        delta = egomotion_estimation.estimate_motion(current_frame, previous_frame);
+        bucketing.apply_bucketing(current_frame);
+
+//        delta = egomotion_estimation.estimate_motion(current_frame, previous_frame, bucketing.selection);
 
         current_pose = current_pose * delta;
         write_pose(output, current_pose);
@@ -262,7 +166,19 @@ int main (int argc, char** argv) {
         ++e_amount;
 
         if (params.output_images) {
-            Mat res = somedrawing_A(img_l, img_r, egomotion_estimation, current_frame, previous_frame);
+//            Mat res = somedrawing_A(img_l, img_r, egomotion_estimation, current_frame, previous_frame, bucketing.selection);
+            Mat res;
+            cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
+
+            int num = 0;
+            Scalar color = geterateColor(num);
+
+            for (auto idx : bucketing.selection) {
+                Vector2d l = current_frame.image_points_left[idx];
+                circle(res, Point(l[0], l[1]), 3, color, 2);
+            }
+
+
             imwrite(params.output_dir+ string(image_name), res);
         }
 

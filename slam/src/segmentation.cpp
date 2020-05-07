@@ -25,12 +25,22 @@ Segmentation::Segmentation(double focal, double cu, double cv, double base, doub
 }
 
 void Segmentation::exec(RegularFrame &current) {
+    vector<int> indices;
+
+    for (auto p : current.additionals)
+        indices.push_back(p.index);
+
+    exec(current, indices);
+}
+
+void Segmentation::exec(RegularFrame &current, vector<int> &indices) {
     current_frame = &current;
+    active_points = indices;
 
     // estimate via finite differences
     estimate_derivatives();
 
-    // build jacobians from partial derivatives that were compute on previous step
+    // build jacobians
     build_jacobians();
 
     // build graph:
@@ -40,39 +50,46 @@ void Segmentation::exec(RegularFrame &current) {
     // compute connected components
     graph.get_components();
     components = graph.components;
+
+    /* in graph used pseudonyms (name = index of name in active_points) */
+    for (auto &component : components)
+        for (auto &element : component)
+            element = active_points[element];
+
 }
 
 void Segmentation::estimate_derivatives() {
     derivatives.clear();
-    derivatives.resize(current_frame->additionals.size());
+    derivatives.resize(active_points.size());
 
-    for (auto p : current_frame->additionals)
-        derivatives[p.index] = estimate_derivative(p.index, &Segmentation::getX);
+    for (int i = 0; i < active_points.size(); ++i)
+        derivatives[i] = estimate_derivative(active_points[i], &Segmentation::getX);
 }
 
 
 void Segmentation::build_jacobians() {
     Jacobians.clear();
-    Jacobians.resize(current_frame->additionals.size());
+    Jacobians.resize(active_points.size());
 
-    for (auto p : current_frame->additionals) {
+    for (int i = 0; i < active_points.size(); ++i) {
         Matrix3d a;
-        a.col(0) = estimate_derivative(p.index, &Segmentation::getdXduL);
-        a.col(1) = estimate_derivative(p.index, &Segmentation::getdXduR);
-        a.col(2) = estimate_derivative(p.index, &Segmentation::getdXdv);
+        a.col(0) = estimate_derivative(active_points[i], &Segmentation::getdXduL);
+        a.col(1) = estimate_derivative(active_points[i], &Segmentation::getdXduR);
+        a.col(2) = estimate_derivative(active_points[i], &Segmentation::getdXdv);
 
-        Jacobians[p.index] = a;
+        Jacobians[i] = a;
     }
 }
 
 void Segmentation::build_graph() {
     /* wrap for https://github.com/Bl4ckb0ne/delaunay-triangulation with little correction (with Vector2 associatet id) */
     vector<dt::Vector2<double>> points;
-    for (auto p : current_frame->additionals)
+    for (int i = 0 ; i < active_points.size(); i++) {
         points.push_back(dt::Vector2<double>(
-                            current_frame->image_points_left[p.index][0],
-                            current_frame->image_points_left[p.index][1],
-                            p.index));
+                            current_frame->image_points_left[active_points[i]][0],
+                            current_frame->image_points_left[active_points[i]][1],
+                            i));
+    }
 
     dt::Delaunay<double> triangulation;
     triangulation.triangulate(points);
@@ -80,10 +97,9 @@ void Segmentation::build_graph() {
 
     vector<dt::Edge<double>> edges_dt = triangulation.getEdges();
 
+
     vector<edge> edges;
-    edges.clear();
-    edges.reserve(current_frame->additionals.size());
-    for (auto e : edges_dt) {
+    for (auto &e : edges_dt) {
         int idx_a = e.v->p_index;
         int idx_b = e.w->p_index;
 
@@ -98,7 +114,7 @@ void Segmentation::build_graph() {
             edges.push_back(edge(idx_a, idx_b, difference));
     }
 
-    graph.update(edges, current_frame->additionals.size());
+    graph.update(edges, active_points.size());
 }
 
 

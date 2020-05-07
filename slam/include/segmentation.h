@@ -43,18 +43,15 @@ public:
     Segmentation(double focal, double cu, double cv, double base, double threshold);
 
     void exec(RegularFrame &current);
+    void exec(RegularFrame &current, vector<int> &indices);
 
     double threshold;
 
     vector<Vector3d> derivatives;
-
-    vector<Vector3d> derivatives_ul;
-    vector<Vector3d> derivatives_ur;
-    vector<Vector3d> derivatives_v;
-
     vector<Matrix3d> Jacobians;
 
     RegularFrame *current_frame;
+    vector<int> active_points;
 
     Graph graph;
 

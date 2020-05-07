@@ -10,7 +10,7 @@ class Bucketing
 public:
     Bucketing(int amount_features_per_cell, int bucket_width, int bucket_height, int width, int height);
 
-    vector<int> apply_bucketing(RegularFrame const frame);
+    void apply_bucketing(RegularFrame const frame);
 
     int amount_ = 2;
 
@@ -22,8 +22,10 @@ public:
 
     vector<int> selection;
 
-private:
+    void set_frame_size(int height, int width);
+
     int amount_buckets_u;
     int amount_buckets_v;
     vector<vector<int>> buckets;
+private:
 };

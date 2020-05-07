@@ -59,8 +59,6 @@ void Tracker::push_back(uint8_t *I1,uint8_t* I2,int32_t* dims, SE3d *prediction)
     else
         matcher->matchFeatures(2);
 
-//    matcher->bucketFeatures(2, 50, 50);
-
     vector<int> previous_indexs(matcher->n1p2); /* correspondences from libviso's indexes to regularframe::points indexes */
     for (int i = 0; i < previous_indexs.size(); i++) {
         previous_indexs[i] = -1;
