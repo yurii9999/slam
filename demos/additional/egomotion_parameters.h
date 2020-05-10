@@ -37,6 +37,10 @@ struct egomotion_parameters
         if (rth)
             ransac_threshold = stod(rth->value());
 
+        xml_node<> *fth = doc.first_node("final_threshold");
+        if (rth)
+            final_threshold = stod(fth->value());
+
         xml_node<> *mp = doc.first_node("motion_prediction");
         if (mp)
             try_predict_motion = stoi(mp->value());

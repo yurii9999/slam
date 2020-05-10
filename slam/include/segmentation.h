@@ -49,6 +49,7 @@ public:
 
     vector<Vector3d> derivatives;
     vector<Matrix3d> Jacobians;
+    vector<Matrix3d> Covariances;
 
     RegularFrame *current_frame;
     vector<int> active_points;

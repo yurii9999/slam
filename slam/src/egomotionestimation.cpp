@@ -102,9 +102,12 @@ void EgomotionEstimation::determine_inliers() {
         estimated_bv_left.normalize(); /* vector that should be close to corresponded bearing vector on the left camera */
         double res_l = 1 - (temp_bearing[i]).dot(estimated_bv_left); /* = 1 - cos */
 
+        residual_l[active_indices[i]] = res_l;
+
         if (abs(res_l) < conf.final_th /*&& abs(res_r) < conf.final_th*/)
             inliers.push_back(active_indices[i]);
     }
+
 }
 
 void EgomotionEstimation::determine_inliers(vector<int> points) {

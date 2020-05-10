@@ -26,6 +26,8 @@ struct Factory {
         params_matcher.cv = cv;
         params_matcher.base = base;
         params_matcher.f = f;
+        params_matcher.refinement = 2;
+        params_matcher.half_resolution = 0;
 
         Tracker tracker(f, cu, cv, params_matcher); /* tracker does not need f, cu cv; only matcher need */
 

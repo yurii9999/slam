@@ -20,5 +20,11 @@ target_link_libraries(demo2 slam)
 add_executable(demo3 "demo3.cpp" "additional/sequence_parameters.h" "additional/segmentation_parameters.h")
 target_link_libraries(demo3 slam)
 
+add_executable(trackertest "trackertest.cpp")
+target_link_libraries(trackertest slam)
+
+add_executable(sceneflow "sceneflow.cpp")
+target_link_libraries(sceneflow slam)
+
 #add_executable(relativePoseDemo "relativeposedemo.cpp")
 #target_link_libraries(relativePoseDemo slam)

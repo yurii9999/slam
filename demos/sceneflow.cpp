@@ -20,65 +20,16 @@
 using namespace cv;
 using namespace std;
 
-void draw_component(Mat &res, vector<int> &segment, RegularFrame &current_frame, Scalar color = Scalar(0, 255, 0)) {
-    for (auto idx_a : segment) {
-        Point a(current_frame.image_points_left[idx_a][0], current_frame.image_points_left[idx_a][1]);
-        for (auto idx_b : segment) {
-            Point b(current_frame.image_points_left[idx_b][0], current_frame.image_points_left[idx_b][1]);
-            line(res, a, b, color, 1);
+Vector3d triangulate(double focal, double base, double cu, double cv, Vector2d left, Vector2d right) {
+    double d = fmax(left[0] - right[0], 0.001);
 
-        }
-    }
-}
-
-void draw(Mat &img, Vector2d feature, Scalar color) {
-    Point a(feature[0], feature[1]);
-    circle(img, a, 3, color, 2);
+    return Vector3d((left[0] - cu) * base / d, (left[1] - cv) * base / d, focal * base / d);
 }
 
 Scalar generate_color(int num) {
     RNG rng(12345 + num * 10);
     Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
     return color;
-}
-
-void draw_graph(Mat &img, Segmentation segmentation, RegularFrame &current_frame) {
-    int num = 213312;
-    for (auto component : segmentation.components) {
-        if (component.size() > 1) {
-            Scalar color = generate_color(num);
-            for (auto idx : component) {
-                Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
-//                circle(img, a, 3, color, 2);
-
-                for (auto idx2 : component) {
-                    Point b(current_frame.image_points_left[idx2][0], current_frame.image_points_left[idx2][1]);
-//                    line(img, a, b, color, 1);
-                }
-            }
-
-            num += 157;
-        }
-    }
-    num = 213312;
-    for (auto component : segmentation.components) {
-
-        Scalar color = generate_color(num);
-        for (auto idx : component) {
-            Point a(current_frame.image_points_left[idx][0], current_frame.image_points_left[idx][1]);
-            circle(img, a, 3, color, 2);
-
-            num += 157;
-        }
-
-    }
-}
-
-void draw_points(Mat &img, RegularFrame &frame, vector<int> indices, Scalar color) {
-    for (auto idx : indices) {
-        Point a(frame.image_points_left[idx][0], frame.image_points_left[idx][1]);
-        circle(img, a, 3, color, 2);
-    }
 }
 
 int main (int argc, char** argv) {
@@ -129,28 +80,78 @@ int main (int argc, char** argv) {
         RegularFrame &current_frame = *tracker.current;
         RegularFrame &previous_frame = *tracker.previous;
 
+        egomotion.estimate_motion(current_frame, previous_frame);
+
         bucketing.apply_bucketing(current_frame);
 
-        egomotion.estimate_motion(current_frame, previous_frame, bucketing.selection);
-        egomotion.determine_inliers();
+        egomotion.determine_inliers(bucketing.selection);
 
         segmentation.exec(current_frame, bucketing.selection);
 
-        Mat res;
-        cv::cvtColor(img_l, res, cv::COLOR_GRAY2BGR);
-        for (auto componen : segmentation.components) {
-            double residual = 0;
-            for (int e : componen)
-                residual += egomotion.residual_l[e];
+        Mat res(1000, img_l.cols, CV_8UC3, Scalar(0, 0, 0));
+        Point center(500, 1000);
 
-            residual /= componen.size();
+        Mat res2;
+        cv::cvtColor(img_l, res2, cv::COLOR_GRAY2BGR);
 
-            if (residual > 0.000005)
-                draw_component(res, componen, current_frame);
+        int i = 0;
+        for (auto &segment : segmentation.components) {
+            Scalar color = generate_color(i);
+            ++i;
+            for (int idx : segment) {
+                RegularFrame::point_reference cur_observation = current_frame.additionals[idx].get_it_on(0);
+                Vector3d cur_point = triangulate(sequence_params.focal, sequence_params.base, sequence_params.cu, sequence_params.cv, cur_observation.get_image_point_left(), cur_observation.get_image_point_right());
+
+                int order = min(current_frame.additionals[idx].age + 1, 2); // order of finite difference
+                vector<Vector3d> o(order); // observations
+
+
+                for (int k = 0; k < order; k++) {
+                    RegularFrame::point_reference prev_observation = current_frame.additionals[idx].get_it_on(k);
+                    o[k] = triangulate(sequence_params.focal, sequence_params.base, sequence_params.cu, sequence_params.cv, prev_observation.get_image_point_left(), prev_observation.get_image_point_right());
+                }
+
+                Vector3d velocity;
+
+                switch (order) {
+                case 6:
+//                    velocity = 137./60 * o[0] - 5 * o[1] + 5 * o[2] - 10./3 * o[3] + 5./4 * o[4] - 1./5 * o[5];
+                    velocity = (o[0] - o[5]) / 5;
+                    break;
+                case 5:
+//                    velocity = 25./12 * o[0] - 4 * o[1] + 3 * o[2] - 4./3 * o[3] + 1./4 * o[4];
+                    velocity = (o[0] - o[4]) / 4;
+                    break;
+                case 4:
+//                    velocity = 11./6 * o[0] - 3 * o[1] + 3./2 * o[2] - 1./3 * o[3];
+                    velocity = (o[0] - o[3]) / 3;
+                    break;
+                case 3:
+//                    velocity = 3./2 * o[0] - 2 * o[1] + 1./2 * o[2];
+                    velocity = (o[0] - o[2]) / 2;
+                    break;
+                case 2:
+                    velocity = o[0] - o[1];
+                    break;
+                }
+
+                Vector3d prev_point = cur_point - velocity;
+
+
+                Point a(cur_point[0] * 3, -cur_point[2]);
+                a *= 10;
+                Point b(prev_point[0] * 3, -prev_point[2]);
+                b *= 10;
+
+                line(res, a + center, b + center, color, 1);
+                circle(res, a + center, 2, color, 2);
+
+                Point f(cur_observation.get_image_point_left()[0], cur_observation.get_image_point_left()[1]);
+                circle(res2, f, 2, color, 2);
+            }
         }
 
-//        draw_graph(res, segmentation, current_frame);
-
+        vconcat(res, res2, res);
         imwrite("destt"+ string(image_name), res);
 
 
